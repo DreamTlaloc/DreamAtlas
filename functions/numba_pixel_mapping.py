@@ -1,23 +1,21 @@
 # Imports all the DreamAtlas functionality and dependencies
+import matplotlib.pyplot as plt
+import scipy as sc
+import numpy as np
+
 from DreamAtlas import *
 
 
 @njit(parallel=True, cache=True)
 def _jump_flood_algorithm(pixel_matrix: np.array,
-                          seed_array: np.array,
                           step_size: int,
-                          weight_array: np.array,
                           shape_array: np.array,
                           distance_matrix: np.array,
                           vector_matrix: np.array,
                           hwrap: bool = True,
                           vwrap: bool = True):
-
-    shape_x, shape_y = np.shape(pixel_matrix)
-
-    size_shape_factor = np.full(len(seed_array), np.inf, dtype=np.float64)
-    for i in range(len(seed_array)):
-        size_shape_factor[i] = np.power(1 / weight_array[i], 1 / shape_array[i])
+    matrix_shape = np.shape(pixel_matrix)
+    shape_x, shape_y = matrix_shape
 
     end = False
     ping_matrix = pixel_matrix
@@ -36,23 +34,16 @@ def _jump_flood_algorithm(pixel_matrix: np.array,
             for y in range(shape_y):
                 p = ping_matrix[x, y]
                 for n in neighbours:
-                    qx = x + n[0]  # Finds the virtual pixel location (can be outside the matrix)
-                    qy = y + n[1]
 
-                    if not hwrap:  # Ensuring the wraparound is respected, if there is no wrapping do not use virtual
-                        qx %= shape_x
-                    if not vwrap:
-                        qy %= shape_y
-
-                    ix = qx % shape_x  # Finds the actual real pixel location (inside the matrix)
-                    iy = qy % shape_y
-                    q = ping_matrix[ix, iy]
+                    vx, vy = x + n[0], y + n[1]
+                    rx, ry = vx % shape_x, vy % shape_y
+                    q = ping_matrix[rx, ry]
 
                     # Main logic of the Jump Flood Algorithm (if the pixels are identical or q has no info go to next)
                     if p == q or q == 0:
                         continue
-                    q_vector = np.subtract(ping_vector_matrix[ix, iy], n)
-                    q_dist = np.linalg.norm(np.multiply(size_shape_factor[q], q_vector), ord=shape_array[q])
+                    q_vector = np.subtract(ping_vector_matrix[rx, ry], n)
+                    q_dist = np.linalg.norm(q_vector, ord=shape_array[q-1])
                     if p == 0:  # if our pixel is empty, populate it with q
                         pong_distance_matrix[x, y] = q_dist
                         pong_vector_matrix[x, y] = q_vector
@@ -75,9 +66,8 @@ def _jump_flood_algorithm(pixel_matrix: np.array,
     return ping_matrix, ping_distance_matrix, ping_vector_matrix
 
 
-def find_pixel_ownership(coordinates_dict: dict,
-                         map_size: list[float, float],
-                         weights: dict,
+def find_pixel_ownership(coordinates_array: np.array,
+                         map_size: np.array,
                          shapes: dict,
                          hwrap: bool = True,
                          vwrap: bool = True,
@@ -88,28 +78,22 @@ def find_pixel_ownership(coordinates_dict: dict,
 
     small_x_size = int(map_size[0] / scale_down)
     small_y_size = int(map_size[1] / scale_down)
-    small_matrix = np.zeros((small_x_size, small_y_size), dtype=np.int32)
-    dict_size = max(coordinates_dict) + 1
-    small_seed_array = np.empty((dict_size, 2), dtype=np.int32)
+    small_matrix = np.zeros((small_x_size, small_y_size), dtype=np.uint16)
+    dict_size = len(coordinates_array)
 
-    weight_array = np.ones(dict_size, dtype=np.float64)
-    shape_array = np.full(dict_size, 2, dtype=np.float64)
-    s_distance_matrix = np.full((small_x_size, small_y_size), np.inf, dtype=np.float64)
-    s_vector_matrix = np.zeros((small_x_size, small_y_size, 2), dtype=np.int32)
-    for point in coordinates_dict:
-        x, y = coordinates_dict[point]
+    shape_array = np.full(dict_size, 2, dtype=np.float32)
+    s_distance_matrix = np.full((small_x_size, small_y_size), np.inf, dtype=np.float32)
+    s_vector_matrix = np.zeros((small_x_size, small_y_size, 2), dtype=np.float32)
+
+    for i, (x, y) in enumerate(coordinates_array):
         x_small = int((x / scale_down) % small_x_size)
         y_small = int((y / scale_down) % small_y_size)
-        small_seed_array[point] = [x_small, y_small]
-        small_matrix[x_small, y_small] = point
+        small_matrix[x_small, y_small] = i+1
         s_distance_matrix[x_small, y_small] = 0
-        weight_array[point] = weights[point]
-        shape_array[point] = shapes[point]
+        shape_array[i] = shapes[i+1]
 
     small_output_matrix, small_distance_matrix, small_vector_matrix = _jump_flood_algorithm(small_matrix,
-                                                                                            small_seed_array,
                                                                                             step_size=2 ** (int(1 + np.log(max(map_size) / scale_down))),
-                                                                                            weight_array=weight_array,
                                                                                             shape_array=shape_array,
                                                                                             distance_matrix=s_distance_matrix,
                                                                                             vector_matrix=s_vector_matrix,
@@ -118,21 +102,17 @@ def find_pixel_ownership(coordinates_dict: dict,
 
     # Scale the matrix back up and run a JFA again to refine
     zoom = np.divide(map_size, small_output_matrix.shape)
-    final_matrix = sc.ndimage.zoom(small_output_matrix, zoom=zoom, order=0, output=np.int32)[:map_size[0], :map_size[1]]
-    final_distance_matrix = sc.ndimage.zoom(np.multiply(small_distance_matrix, scale_down), zoom=zoom, order=0, output=np.float64)[:map_size[0], :map_size[1]]
-    final_vector_matrix = sc.ndimage.zoom(np.multiply(small_vector_matrix, scale_down), zoom=[zoom[0], zoom[1], 1], order=0, output=np.int32)[:map_size[0], :map_size[1]]
+    final_matrix = sc.ndimage.zoom(small_output_matrix, zoom=zoom, order=0, output=np.uint16)[:map_size[0], :map_size[1]]
+    final_distance_matrix = sc.ndimage.zoom(small_distance_matrix * scale_down, zoom=zoom, order=0, output=np.float32)[:map_size[0], :map_size[1]]
+    final_vector_matrix = sc.ndimage.zoom(small_vector_matrix * scale_down, zoom=[zoom[0], zoom[1], 1], order=0, output=np.float32)[:map_size[0], :map_size[1]]
 
-    final_seed_array = np.empty((dict_size, 2), dtype=np.int32)
-    for point in coordinates_dict:
-        x, y = coordinates_dict[point]
+    for i, (x, y) in enumerate(coordinates_array):
         x_final = int((map_size[0] + x) % map_size[0])
         y_final = int((map_size[1] + y) % map_size[1])
-        final_seed_array[point] = [x_final, y_final]
-        final_matrix[x_final, y_final] = point
+        final_matrix[x_final, y_final] = i+1
 
-    final_matrix, _, __ = _jump_flood_algorithm(final_matrix, final_seed_array,
+    final_matrix, _, __ = _jump_flood_algorithm(final_matrix,
                                                 step_size=2 ** (int(np.log(max(map_size)))),
-                                                weight_array=weight_array,
                                                 shape_array=shape_array,
                                                 distance_matrix=final_distance_matrix,
                                                 vector_matrix=final_vector_matrix,
@@ -140,39 +120,6 @@ def find_pixel_ownership(coordinates_dict: dict,
                                                 vwrap=vwrap)
 
     return final_matrix
-
-
-# def pb_pixel_allocation(pixel_matrix):
-#
-#     pb_combined = np.vstack(_numba_pb_allocation(pixel_matrix))
-#     pb_list = []
-#     for entry in pb_combined:
-#         if entry[2] != 0:
-#             pb_list.append(entry)
-#
-#     return pb_list
-#
-#
-# @njit(parallel=True, cache=True)
-# def _numba_pb_allocation(pixel_matrix):
-#     x_size, y_size = pixel_matrix.shape
-#     split_pb_list = np.zeros((y_size, x_size, 4), dtype=np.int32)
-#
-#     for y in prange(y_size):
-#         pb_length = 0
-#         first_prov_index = pixel_matrix[0, y]
-#         x1 = 0
-#         for x2 in range(x_size):
-#             current_prov_index = pixel_matrix[x2, y]
-#             if current_prov_index != first_prov_index:  # If it's a new province id, append the last pb string and start a new one
-#                 split_pb_list[y, x1] = [y, x1, pb_length, first_prov_index]
-#                 first_prov_index = current_prov_index
-#                 x1 = x2
-#                 pb_length = 1
-#             else:  # If this is the same prov just extend the length and continue
-#                 pb_length += 1
-#
-#     return split_pb_list
 
 
 def pb_pixel_allocation(pixel_matrix):
@@ -198,3 +145,69 @@ def pb_pixel_allocation(pixel_matrix):
         pixel_ownership_list.append([first_x, first_y, pb_length, first_prov_index])  # final section
 
     return pixel_ownership_list
+
+
+def pb_2_map(pb_list, width, height):
+    pixel_map = np.array((width, height), dtype=np.int16)
+
+    for pb in pb_list:
+        x, y, len, owner = pb
+        for pixel in range(len):
+            pixel_map[x + pixel][y] = owner
+            coordinate_dict[owner].append([x + pixel, y])
+
+            province = self.province_list[owner - 1]
+
+    # self.height_map[x + pixel][y] = 20
+    # if province.terrain_int & 4:
+    #     self.height_map[x + pixel][y] = -30
+    # if province.terrain_int & 2052 == 2052:
+    #     self.height_map[x + pixel][y] = -100
+    return pixel_map
+
+
+@njit(parallel=True, cache=True)
+def fast_matrix_2_pb(pixel_matrix):
+    x_size, y_size = pixel_matrix.shape
+    flat = pixel_matrix.T.flatten()
+    change_indices = np.nonzero(np.append(flat, 0) != np.append(0, flat))[0]
+    rle_array = (np.append(change_indices, change_indices[-1]) - np.append(0, change_indices))[0:-1]
+    remaining = y_size * x_size - np.sum(rle_array)
+
+    if remaining > 0:
+        rle_array = np.append(rle_array, remaining)
+
+    return list(rle_array)
+
+
+# @njit(parallel=True, cache=True)
+def fast_pb_2_matrix(pb_list, width, height):
+    pixel_map = np.zeros((width, height), dtype=np.uint16)
+    for x, y, l, i in pb_list:
+        pixel_map[x:x+l+1, y] = i
+
+    return pixel_map
+
+
+def pixel_matrix_2_bitmap_arrays(pixel_matrix):
+    bitmaps = list()
+
+    for i in np.unique(pixel_matrix):  # Goes through all unique province indices and finds the bitmaps
+        bitmap_array = pixel_matrix == i
+        non_zero = np.nonzero(bitmap_array)  # Reduce the size by finding the bounding box and recording the positional coordinates
+        x_1 = non_zero[0].min()
+        x_2 = non_zero[0].max()
+        y_1 = non_zero[1].min()
+        y_2 = non_zero[1].max()
+
+        bitmaps.append([i, (x_1, y_1), np.multiply(254, bitmap_array[x_1:x_2 + 1, y_1:y_2 + 1]).astype(dtype=np.uint8)])
+
+    return bitmaps
+
+
+def pixel_matrix_2_borders_array(pixel_matrix, thickness=1):
+    left_matrix = np.roll(pixel_matrix, shift=-2 * thickness, axis=0)
+    down_matrix = np.roll(pixel_matrix, shift=-2 * thickness, axis=1)
+    border_array = (down_matrix != pixel_matrix) | (left_matrix != pixel_matrix)
+
+    return np.multiply(254, np.roll(border_array, shift=thickness, axis=(0, 1))).astype(dtype=np.uint8)

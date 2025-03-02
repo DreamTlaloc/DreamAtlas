@@ -1,3 +1,1 @@
-from DreamAtlas import *
-
-from .DreamAtlasGenerator import *
+from .DreamAtlas_map_generator import *

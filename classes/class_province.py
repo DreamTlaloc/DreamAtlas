@@ -1,4 +1,3 @@
-from . import *
 
 
 class Province:
@@ -8,17 +7,16 @@ class Province:
                  name: str = None,
                  plane: int = None,
                  coordinates: list = None,
-                 fixed: bool = False,
                  terrain_int: int = 0,
                  capital_location: bool = False,
                  capital_nation: int = None,
-                 parent_region: int = None,
+                 parent_region=None,
                  has_commands: bool = False,
                  poptype: int = None,
                  owner: int = None,
                  killfeatures: bool = False,
-                 features: list[int] = [],
-                 knownfeatures: list[int] = [],
+                 features: list[int] = list(),
+                 knownfeatures: list[int] = list(),
                  fort: int = None,
                  temple: bool = False,
                  lab: bool = False,
@@ -39,7 +37,6 @@ class Province:
         self.name = name
         self.plane = plane
         self.coordinates = coordinates
-        self.fixed = fixed
 
         # Province properties
         self.terrain_int = terrain_int
@@ -70,3 +67,11 @@ class Province:
         self.size = size
         self.shape = shape
         self.height = height
+
+    def __str__(self):  # Printing the class returns this
+
+        string = f'\nType - {type(self)}\n\n'
+        for key in self.__dict__:
+            string += f'{key} : {self.__dict__[key]}\n'
+
+        return string

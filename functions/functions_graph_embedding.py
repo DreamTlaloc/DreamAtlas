@@ -1,27 +1,28 @@
+from numba.np.arrayobj import dtype_type
+
 from DreamAtlas import *
 
 
 def embed_region_graph(graph: dict,
-                       map_size: tuple[int, int],
-                       scale_down: float,
+                       map_size: np.array,
+                       scale_down: int,
                        seed: int):
 
     graph_range = range(1, 1 + len(graph))
 
     # Set the graph size to embed (smaller is faster)
-    x_size = int(scale_down * map_size[0])
-    y_size = int(scale_down * map_size[1])
+    size = np.array(map_size / scale_down, dtype=np.uint32)
     connections = [[1, 0], [0, 1], [0, -1], [-1, 0]]
 
     # Make the H graph
     target_graph = dict()
-    for x in range(x_size):
-        for y in range(y_size):
-            target_graph[(int(x / scale_down), int(y / scale_down))] = list()
+    for x in range(size[0]):
+        for y in range(size[1]):
+            target_graph[(int(x * scale_down), int(y * scale_down))] = list()
             for connection in connections:
-                x_coord = int(((x + connection[0]) % x_size) / scale_down)
-                y_coord = int(((y + connection[1]) % y_size) / scale_down)
-                target_graph[(int(x / scale_down), int(y / scale_down))].append((x_coord, y_coord))
+                x_coord = int(((x + connection[0]) % size[0]) * scale_down)
+                y_coord = int(((y + connection[1]) % size[1]) * scale_down)
+                target_graph[(int(x * scale_down), int(y * scale_down))].append((x_coord, y_coord))
 
     target_graph = ntx.Graph(incoming_graph_data=target_graph)
     while True:
@@ -53,12 +54,12 @@ def embed_region_graph(graph: dict,
                 if j == i or j in graph[i]:
                     dart = [0, 0]
                     for axis in range(2):
-                        if abs(edge[0][axis] - edge[1][axis]) > 1 / scale_down:
+                        if abs(edge[0][axis] - edge[1][axis]) > scale_down:
                             dart[axis] = np.sign(edge[0][axis] - edge[1][axis])
                     attractor_graph[node].append(edge[1])
                     attractor_darts[node].append(dart)
 
-    attractor_coordinates, attractor_darts = attractor_adjustment(attractor_graph, attractor_coordinates, attractor_darts, node_2_index, map_size, damping_ratio=0.5, iterations=100)
+    attractor_coordinates, attractor_darts = attractor_adjustment(attractor_graph, attractor_coordinates, attractor_darts, node_2_index, map_size, damping_ratio=0.5, iterations=1000)
 
     coordinates, darts, done_edges = dict(), dict(), set()
     for i in graph:  # Merge the alike vertices of the graph
@@ -79,7 +80,7 @@ def embed_region_graph(graph: dict,
                         dart_candidates.append(dart)
             darts[i].append(dart)
 
-    return coordinates, darts, attractor_coordinates, node_2_index
+    return coordinates, darts
 
 
 @njit(parallel=True)
@@ -89,48 +90,47 @@ def _numba_attractor_adjustment(key_list: np.array,
                                 darts: np.array,
                                 attractor_array: np.array,
                                 damping_ratio: float,
-                                map_size: tuple[int, int],
+                                map_size: np.array,
                                 iterations: int):
     dict_size = len(key_list)
-    map_size_array = np.asarray(map_size, dtype=np.float64)
-    velocity = np.zeros((dict_size, 2))
 
-    equilibrium = False
+    net_velocity = np.zeros((dict_size, 2))
     for _ in range(iterations):
-
+        attractor_force = np.zeros((dict_size, 2))
         for i in prange(dict_size):
-            attractor_force = np.zeros(2)
             for j in range(dict_size):
-                if attractor_array[i, j] == 1:
-                    attractor_force = attractor_force + np.asarray(coordinates[j] + darts[i, j] * map_size_array - coordinates[i], dtype=np.float64)
-            velocity[i] = damping_ratio * (velocity[i] + attractor_force)
+                if attractor_array[i, j]:
+                    attractor_force[i] += coordinates[j] + darts[i, j] * map_size - coordinates[i]
 
-        for i in range(dict_size):  # Check if non-fixed particles are within tolerance
-            if np.linalg.norm(velocity[i]) > 0.001:
+        net_velocity = damping_ratio * (net_velocity + attractor_force)
+
+        equilibrium = 1
+        for c in range(dict_size):  # Check if particles are within tolerance
+            if np.linalg.norm(net_velocity[c]) > 0.001:
+                equilibrium = 0
                 break
-            if i == dict_size - 1:
-                equilibrium = True
 
-        for i in range(dict_size):  # Update the position
-            coordinates[i] = coordinates[i] + velocity[i]
-
+        coordinates += net_velocity
+        for a in range(dict_size):  # Update the position
             for axis in range(2):
-                if not (0 <= coordinates[i, axis] < map_size_array[axis]):
-                    dart_change = -np.sign(coordinates[i, axis])
-                    coordinates[i, axis] = int(coordinates[i, axis] % map_size_array[axis])
+                if not (0 <= coordinates[a, axis] < map_size[axis]):
+                    dart_change = -np.sign(coordinates[a, axis])
+                    # print(dart_change, coordinates[a, axis], coordinates[a, axis] % map_size[axis])
+                    coordinates[a, axis] = coordinates[a, axis] % map_size[axis]
 
-                    for j in range(dict_size):  # Iterating over all of this vertex's connections
-                        if graph[i, j]:
-                            new_value = darts[i, j, axis] + dart_change
+                    for b in range(dict_size):  # Iterating over all of this vertex's connections
+                        if graph[a, b]:
+                            new_value = darts[a, b, axis] + dart_change
                             if new_value < -1:
                                 new_value = 1
                             if new_value > 1:
                                 new_value = -1
 
-                            darts[i, j, axis] = int(new_value)  # Setting the dart for this vertex
-                            darts[j, i, axis] = int(-new_value)  # Setting the dart for other vertex
+                            darts[a, b, axis] = new_value  # Setting the dart for this vertex
+                            darts[b, a, axis] = -new_value  # Setting the dart for other vertex
         if equilibrium:
             break
+
     return coordinates, darts
 
 
@@ -143,10 +143,10 @@ def attractor_adjustment(graph: dict,
                          iterations: int):
 
     key_list = np.zeros(len(graph), dtype=int)
-    graph_array = np.zeros((len(graph), len(graph)), dtype=int)
-    coordinates_array = np.zeros((len(graph), 2), dtype=int)
-    darts_array = np.zeros((len(graph), len(graph), 2), dtype=int)
-    attractor_array = np.zeros((len(graph), len(graph)), dtype=int)
+    graph_array = np.zeros((len(graph), len(graph)), dtype=np.bool_)
+    coordinates_array = np.zeros((len(graph), 2), dtype=np.float32)
+    darts_array = np.zeros((len(graph), len(graph), 2), dtype=np.int8)
+    attractor_array = np.zeros((len(graph), len(graph)), dtype=np.bool_)
 
     ref_2_node, node_2_ref = dict(), dict()
     index = 0
@@ -179,11 +179,11 @@ def attractor_adjustment(graph: dict,
 
     for i in range(len(key_list)):
         node = ref_2_node[key_list[i]]
-        coordinates_output[node] = _coordinates[i].tolist()
+        coordinates_output[node] = _coordinates[i].astype(np.float32).tolist()
         darts_output[node] = [None] * len(graph[node])
         for j in range(len(key_list)):
             if graph_array[i, j]:
-                darts_output[node][graph[node].index(ref_2_node[key_list[j]])] = _darts[i, j].tolist()
+                darts_output[node][graph[node].index(ref_2_node[key_list[j]])] = _darts[i, j].astype(np.int8).tolist()
 
     return coordinates_output, darts_output
 

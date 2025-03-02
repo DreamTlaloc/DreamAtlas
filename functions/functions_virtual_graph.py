@@ -1,12 +1,13 @@
+import numpy as np
+
 from DreamAtlas import *
 
 
 def make_virtual_graph(graph, coordinates, darts, mapsize):
 
-    virtual_graph = {}
-    virtual_coordinates = {}
+    virtual_graph, virtual_coordinates = dict(), dict()
     for i in graph:
-        virtual_graph[i] = []
+        virtual_graph[i] = list()
         virtual_coordinates[i] = coordinates[i]
 
     new_index = max(graph) + 1
@@ -25,7 +26,7 @@ def make_virtual_graph(graph, coordinates, darts, mapsize):
                     vector = coordinates[j] + darts[i][j_index] * np.asarray(mapsize) - coordinates[i]
                     unit_vector = vector / np.linalg.norm(vector)
 
-                    infinite_coordinates = []  # Find the infinite edge points
+                    infinite_coordinates = list()  # Find the infinite edge points
                     for axis in range(2):
                         if darts[i][j_index][axis] == -1:
                             ic = 0
@@ -61,7 +62,6 @@ def make_virtual_graph(graph, coordinates, darts, mapsize):
                         virtual_graph[i].append(new_index)  # Vertex to edge
                         virtual_graph[new_index] = [i]
                         virtual_coordinates[new_index] = infinite_coordinates[0]
-
                         virtual_graph[new_index + 1] = [j]  # Edge to connection
                         virtual_graph[j].append(new_index + 1)
                         virtual_coordinates[new_index + 1] = [infinite_coordinates[0][0] - dart_x * mapsize[0], infinite_coordinates[0][1] - dart_y * mapsize[1]]
@@ -69,3 +69,23 @@ def make_virtual_graph(graph, coordinates, darts, mapsize):
                     new_index += 2*len(infinite_coordinates)
 
     return virtual_graph, virtual_coordinates
+
+
+def ui_find_virtual_graph(graph, coordinates, map_size, wraparound):
+
+    darts = dict()
+    for i in graph:
+        darts[i] = list()
+        ix, iy = coordinates[i]
+        for j in graph[i]:
+            min_dist = np.inf
+            best_dart = [0, 0]
+            for n in wraparound:
+                jx, jy = np.add(coordinates[j], np.multiply(map_size, n))
+                new_dist = np.linalg.norm([ix-jx, iy-jy])
+                if new_dist < min_dist:
+                    best_dart = n
+                    min_dist = new_dist
+            darts[i].append(best_dart)
+
+    return make_virtual_graph(graph, coordinates, darts, map_size)

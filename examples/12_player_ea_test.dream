@@ -1,0 +1,44 @@
+-- DreamAtlas Settings File
+-- This file is used only as the input for a DreamAtlas map generation and does not interact with the main game or serve as a .map file
+-- Please try to alter only the inputs for the settings, there is no guarantee that an incorrect settings file will work as intended...
+
+-- General settings
+#seed 890
+#map_title "12_players_ea_test"
+#wraparound 3
+#art_style 0
+#age 0
+
+-- Balance/flavour settings
+#site_frequency 65
+#pop_balancing 1
+
+#throne_region_num 12
+#water_region_type 1
+#water_region_num 3
+#cave_region_type 1
+#cave_region_num 3
+#vast_region_num 3
+
+#player_neighbours 6
+#cap_connections 6
+#homeland_size 9
+#periphery_size 3
+
+-- Nations + Teams - use the nation number! [#nation nation_number team_number]
+#vanilla_nation 11 1
+#vanilla_nation 31 2
+#vanilla_nation 15 3
+#vanilla_nation 17 4
+#vanilla_nation 24 5
+#vanilla_nation 10 6
+#vanilla_nation 7 7
+#vanilla_nation 23 8
+#vanilla_nation 32 9
+#vanilla_nation 5 10
+#custom_nation 600 Custoida Custdesc 2 0 0 1 11
+#generic_nation 0 0 0 1 12
+
+-- Adds unconnected province for the omniscience mod nation in the underground
+#omniscience 1
+#disciples 1

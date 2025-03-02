@@ -1,8 +1,5 @@
-from . import *
-
-
-# Region config
-########################################################################################################################
+import numpy as np
+import pathlib
 
 # Terrain preference vector is the weighting for each type of terrain
 TERRAIN_PREF_BITS = [0, 16, 32, 64, 128, 256]
@@ -11,29 +8,47 @@ TERRAIN_PREFERENCES = [         # TERRAIN_PREF_XXXX = [plains, highlands, swamp,
     [10, 1, 2, 1, 0.5, 0.5],    # Plains
     [3, 1, 1, 0.5, 5, 2],       # Forest
     [3, 4, 1, 1, 2, 1],         # Mountains
-    [3, 1, 0.5, 3, 0.5, 0.5],   # Desert
+    [3, 1, 1, 2, 1, 1],         # Desert
     [3, 1, 3, 0.5, 2, 1],       # Swamp
-    [3, 2, 1, 1, 2, 1]          # Karst
 ]
-TERRAIN_PREF_BALANCED, TERRAIN_PREF_PLAINS, TERRAIN_PREF_FOREST, TERRAIN_PREF_MOUNTAINS, TERRAIN_PREF_DESERT, TERRAIN_PREF_SWAMP, TERRAIN_PREF_KARST = TERRAIN_PREFERENCES
+TERRAIN_PREF_BALANCED, TERRAIN_PREF_PLAINS, TERRAIN_PREF_FOREST, TERRAIN_PREF_MOUNTAINS, TERRAIN_PREF_DESERT, TERRAIN_PREF_SWAMP = TERRAIN_PREFERENCES
 
 # Layout preference vector informs the land-sea split
-LAYOUT_PREFERENCES = [  # LAYOUT_PREF_XXXX = [cap circle split, rest of homeland split]
-    [1.0, 0.9],         # Land
-    [1.0, 1.0],         # Cave
-    [0.8, 0.8],         # Coast
-    [0.0, 0.9],         # Island
-    [0.0, 0.8],         # Deeps
-    [0.2, 0.8],         # Shallows
-    [0.7, 0.8]          # Lakes
+LAYOUT_PREFERENCES = [  # LAYOUT_PREF_XXXX = [cap terrain, cap provinces ratio, extra provinces ratio]
+    [1, 1.0, 0.8],         # Land
+    [1, 1.0, 1.0],          # Cave
+    [1, 0.9, 0.8],          # Coast
+    [1, 0.0, 0.9],          # Island
+    [0, 0.0, 0.8],          # Deeps
+    [0, 0.1, 0.8],          # Shallows
+    [1, 0.9, 0.7]           # Lakes
 ]
 LAYOUT_PREF_LAND, LAYOUT_PREF_CAVE, LAYOUT_PREF_COAST, LAYOUT_PREF_ISLAND, LAYOUT_PREF_DEEPS, LAYOUT_PREF_SHALLOWS, LAYOUT_PREF_LAKES = LAYOUT_PREFERENCES
 
-TERRAIN_2_HEIGHTS_DICT = {0: 0, 4: -600, 16: 200, 32: 50, 64: 300, 128: 90, 256: 250, 2048: -200, 4096: 1000, 8388608: 500, 68719476736: -100}
-TERRAIN_2_SHAPES_DICT = {0: 1, 4: 2, 8: 0.7, 16: 0.7, 32: 0.5, 64: 2, 128: 2, 256: 0.5, 2048: 1, 4096: 0.7, 8388608: 1, 68719476736: 1}
+REGION_TYPE = ['Throne', 'Homeland', 'Periphery', 'Water', 'Cave', 'Vast', 'Blocker']
+REGION_WATER_INFO = [
+    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_DEEPS, 0, 1],
+    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_DEEPS, 1, 1],
+    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_DEEPS, 3, 2],
+    [TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_DEEPS, 6, 3]
+]
 
-# Homelands format: [Nation index, terrain preference, layout preference, capital terrain int, plane]
-HOMELANDS_INFO = [
+REGION_CAVE_INFO = [
+    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 0, 1],
+    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 1, 1],
+    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 3, 1],
+    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 5, 4]
+]
+
+REGION_VAST_INFO = [0, 0, 0, 0, 0, 0]
+
+# Blocker vector informs how different blockers are created
+REGION_BLOCKER_INFO = {  # BLOCKER_XXXX = [plane, terrain int, region_size, anchor_connections]
+    6: [1, 8392704, 3, 2],                                      # Mountain Range
+    8: [2, 4096 + 68719476736 + 576460752303423488, 7, 6]       # Cave Wall
+}
+
+HOMELANDS_INFO = [  # Homelands format: [Nation index, terrain preference, layout preference, capital terrain int, plane]
     # EA NATIONS
     [5, TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 0, 1],             # Arcoscephale
     [6, TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 0, 1],             # Mekone
@@ -62,7 +77,7 @@ HOMELANDS_INFO = [
     [29, TERRAIN_PREF_DESERT, LAYOUT_PREF_COAST, 0, 1],             # Berytos
     [30, TERRAIN_PREF_BALANCED, LAYOUT_PREF_COAST, 0, 1],           # Vanheim
     [31, TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 0, 1],            # Helheim
-    [32, TERRAIN_PREF_KARST, LAYOUT_PREF_LAND, 0, 1],               # Rus
+    [32, TERRAIN_PREF_FOREST, LAYOUT_PREF_LAND, 0, 1],              # Rus
     [33, TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 0, 1],            # Niefelheim
     [34, TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 0, 1],            # Muspelheim
     [40, TERRAIN_PREF_FOREST, LAYOUT_PREF_SHALLOWS, 4, 1],          # Pelagia
@@ -84,7 +99,7 @@ HOMELANDS_INFO = [
     [59, TERRAIN_PREF_BALANCED, LAYOUT_PREF_CAVE, 4096, 2],         # Agartha
     [60, TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_LAND, 0, 1],           # Ulm
     [61, TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 0, 1],            # Marignon
-    [62, TERRAIN_PREF_KARST, LAYOUT_PREF_LAND, 128, 1],             # Pyrene
+    [62, TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_LAND, 128, 1],         # Pyrene
     [63, TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 8392704, 2],      # Abysia
     [64, TERRAIN_PREF_DESERT, LAYOUT_PREF_LAND, 64, 1],             # Ashdod
     [65, TERRAIN_PREF_DESERT, LAYOUT_PREF_LAND, 64, 1],             # Naba
@@ -96,7 +111,7 @@ HOMELANDS_INFO = [
     [71, TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_LAND, 8388608, 1],     # Caelum
     [72, TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_LAND, 8388608, 1],     # Nazca
     [73, TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 0, 1],            # Mictlan
-    [74, TERRAIN_PREF_SWAMP, LAYOUT_PREF_CAVE, 4128, 2],            # Xibalba
+    [74, TERRAIN_PREF_SWAMP, LAYOUT_PREF_LAKES, 4128, 2],            # Xibalba
     [75, TERRAIN_PREF_SWAMP, LAYOUT_PREF_LAND, 32, 1],              # Ctis
     [76, TERRAIN_PREF_FOREST, LAYOUT_PREF_LAND, 0, 1],              # Machaka
     [77, TERRAIN_PREF_BALANCED, LAYOUT_PREF_ISLAND, 0, 1],          # Phaeacia
@@ -124,7 +139,7 @@ HOMELANDS_INFO = [
     [105, TERRAIN_PREF_PLAINS, LAYOUT_PREF_LAND, 0, 1],             # Ragha
     [106, TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_LAND, 8388608, 1],    # Caelum
     [107, TERRAIN_PREF_DESERT, LAYOUT_PREF_LAND, 64, 1],            # Gath
-    [108, TERRAIN_PREF_KARST, LAYOUT_PREF_LAND, 128, 1],            # Patala
+    [108, TERRAIN_PREF_FOREST, LAYOUT_PREF_LAND, 128, 1],           # Patala
     [109, TERRAIN_PREF_PLAINS, LAYOUT_PREF_LAND, 0, 1],             # Tien Chi
     [110, TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_COAST, 0, 1],         # Jomon
     [111, TERRAIN_PREF_FOREST, LAYOUT_PREF_LAND, 128, 1],           # Mictlan
@@ -140,7 +155,7 @@ HOMELANDS_INFO = [
     [123, TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_LAND, 128, 1],        # Pyrene
     [125, TERRAIN_PREF_BALANCED, LAYOUT_PREF_COAST, 0, 1],          # Erytheia
     [126, TERRAIN_PREF_BALANCED, LAYOUT_PREF_COAST, 0, 1],          # Atlantis
-    [127, TERRAIN_PREF_BALANCED, LAYOUT_PREF_DEEPS, 2052, 1],       # Ryleh
+    [127, TERRAIN_PREF_BALANCED, LAYOUT_PREF_DEEPS, 2052, 1]        # Ryleh
 ]
 
 # Periphery config
@@ -150,40 +165,45 @@ PERIPHERY_INFO = [
     [TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_LAND],     # 2 MOUNTAINS
     [TERRAIN_PREF_DESERT, LAYOUT_PREF_LAND],        # 3 WASTES
     [TERRAIN_PREF_FOREST, LAYOUT_PREF_LAND],        # 4 DEEPWOODS
-    [TERRAIN_PREF_KARST, LAYOUT_PREF_LAND],         # 5 OVERUNDER
+    [TERRAIN_PREF_FOREST, LAYOUT_PREF_LAND],         # 5 OVERUNDER
     [TERRAIN_PREF_BALANCED, LAYOUT_PREF_ISLAND],    # 6 ARCHIPELAGO
     [TERRAIN_PREF_SWAMP, LAYOUT_PREF_LAKES],        # 7 WETLANDS
     [TERRAIN_PREF_BALANCED, LAYOUT_PREF_DEEPS],     # 8 SEABED
     [TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_DEEPS],    # 9 ABYSS
     [TERRAIN_PREF_BALANCED, LAYOUT_PREF_COAST],     # 10 DELTA
-    [TERRAIN_PREF_KARST, LAYOUT_PREF_DEEPS]         # 11 UNDERSEA
+    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_DEEPS]      # 11 UNDERSEA
 ]
 
+TERRAIN_2_HEIGHTS_DICT = {0: 0, 4: -600, 16: 200, 32: 50, 64: 300, 128: 90, 256: 250, 2048: -200, 4096: 1000, 8388608: 500, 68719476736: -100}
+TERRAIN_2_SHAPES_DICT = {0: 1, 4: 1.1, 8: 0.9, 16: 0.9, 32: 1.1, 64: 1.2, 128: 1.2, 256: 0.9, 2048: 1, 4096: 1.1, 8388608: 1, 68719476736: 1}
+TERRAIN_POPULATION_ORDER = {0: 4, 16: 2, 32: 1, 64: 0, 128: 3, 256: 5}  # TERRAIN_PREF_XXXX = [plains, highlands, swamp, waste, forest, farm]
+
 # Connections config [Standard border, Mountain pass, River border, Impassable, Road, River bridge, Impassable mountain]
-NEIGHBOUR_SPECIAL_WEIGHTS = [0.8, 0.05, 0.05, 0, 0.05, 0.02, 0.05]
-# check 33,
+NEIGHBOUR_SPECIAL_WEIGHTS = [0.8, 0.05, 0.05, 0, 0.05, 0.02, 0.05, 0]
 
 # UNIVERSAL FUNCTIONS AND VARIABLES
 ########################################################################################################################
+ROOT_DIR = pathlib.Path(__file__).parent.parent
+AGES = ['Early Age', 'Middle Age', 'Late Age']
 
-ROOT_DIR = pathlib.Path(__file__).parent
-REGION_TYPE = ['Throne', 'Homeland', 'Periphery']
-PI_2 = 2 * np.pi
 CAPITAL_POPULATION = 40000
+
 AGE_POPULATION_MODIFIERS = [0.8, 1.0, 1.2]
-TERRAIN_POPULATION_ORDER = {0: 4, 16: 2, 32: 1, 64: 0, 128: 3, 256: 5}  # TERRAIN_PREF_XXXX = [plains, highlands, swamp, waste, forest, farm]
+AGE_POPULATION_SIZES = [8000, 10000, 12000]
 AVERAGE_POPULATION_SIZES = [5500, 11000, 16500]
-RESOURCE_SPECIFIC_TERRAINS = {4224: 1, 4112: 1.6, 4128: 2, 4096: 1, 132: 1, 20: 1.4, 2052: 1.2, 4: 1, 8388608: 2,
-                              128: 1.6, 16: 1.4}
+RESOURCE_SPECIFIC_TERRAINS = {4224: 1, 4112: 1.6, 4128: 2, 4096: 1, 132: 1, 20: 1.4, 2052: 1.2, 4: 1, 8388608: 2, 128: 1.6, 16: 1.4}
 
 NEIGHBOURS_NO_WRAP = np.array([[0, 0]])
 NEIGHBOURS_X_WRAP = np.array([[0, 0], [1, 0], [-1, 0]])
 NEIGHBOURS_Y_WRAP = np.array([[0, 0], [0, 1], [0, -1]])
 NEIGHBOURS_FULL = np.array([[0, 0], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [0, -1], [-1, -1], [-1, 0]])
+NEIGHBOURS = [NEIGHBOURS_NO_WRAP, NEIGHBOURS_X_WRAP, NEIGHBOURS_Y_WRAP, NEIGHBOURS_FULL]
+
+PIXELS_PER_PROVINCE = 40000
 
 DATASET_GRAPHS = [[[] for i in range(7)] for d in range(17)]
 vertex, graph_dict = 0, dict()
-with open(ROOT_DIR / 'three_connected_graphs', 'r') as f:
+with open(ROOT_DIR / 'databases/three_connected_graphs', 'r') as f:
     for line in f.readlines():
         data = line.split()
         if not data:
@@ -196,7 +216,7 @@ with open(ROOT_DIR / 'three_connected_graphs', 'r') as f:
         graph_dict[int(data[0].strip(':'))] = [int(x) for x in data[1:]]
 
 PERIPHERY_DATA = []
-with open(ROOT_DIR / 'peripheries', 'r') as f:
+with open(ROOT_DIR / 'databases/peripheries', 'r') as f:
     for line in f.readlines():
         data = line.strip('\n')
         data = data.split('\t')

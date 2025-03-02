@@ -1,135 +1,82 @@
-from . import *
-
 
 class DreamAtlasSettings:
 
-    def __init__(self,
-                 index: int,
-                 map_title: str = None,
-                 wraparound: tuple[bool, bool] = None,
-                 art_style: int = None,
-                 variance: float = None,
-                 pop_balancing: int = None,
-                 site_frequency: int = None,
-                 water_province_size: float = None,
-                 cave_province_size: float = None,
-                 cap_connections: int = None,
-                 homeland_size: int = None,
-                 periphery_size: int = None,
-                 throne_sites: int = None,
-                 player_neighbours: int = None,
-                 nations: list[int, ...] = None,
-                 custom_nations: list[list[int, int, int, int, int], ...] = None,
-                 age: int = None,
-                 omniscience: bool = False,
-                 seed: int = None):
+    def __init__(self, index: int):  # DreamAtlas generator settings
 
-        # General settings
         self.index = index
-        if seed is None:
-            seed = 1
-        if map_title is None:
-            map_title = 'DreamAtlas_%i' % self.index
-        if wraparound is None:
-            wraparound = 0
-        if art_style is None:
-            art_style = 0
+        self.seed: int = 0
+        self.description: str = None
+        self.map_title: str = None
+        self.ygg_description: str = None
+        self.ygg_icon: str = None
 
-        self.seed = seed
-        self.map_title = map_title
-        self.wraparound = wraparound
-        self.art_style = art_style
+        self.homeland_size: int = None
+        self.cap_connections: int = None
+        self.player_neighbours: int = None
+        self.periphery_size: int = None
+        self.throne_region_num: int = None
+        self.water_region_type: int = None
+        self.water_region_num: int = None
+        self.cave_region_type: int = None
+        self.cave_region_num: int = None
+        self.vast_region_num: int = None
 
-        # Balance/flavour settings
-        if variance is None:
-            variance = 0.5
-        if pop_balancing is None:
-            pop_balancing = 0
-        if site_frequency is None:
-            site_frequency = 60
-        if water_province_size is None:
-            water_province_size = 2
-        if cave_province_size is None:
-            cave_province_size = 1.5
-        if cap_connections is None:
-            cap_connections = 5
-        if homeland_size is None:
-            homeland_size = 10
-        if periphery_size is None:
-            periphery_size = 3
-        if throne_sites is None:
-            throne_sites = 10
-        if player_neighbours is None:
-            player_neighbours = 4
-            
-        self.variance = variance
-        self.pop_balancing = pop_balancing
-        self.site_frequency = site_frequency
-        self.water_province_size = water_province_size
-        self.cave_province_size = cave_province_size
-        self.cap_connections = cap_connections
-        self.homeland_size = homeland_size
-        self.periphery_size = periphery_size            
-        self.throne_sites = throne_sites
-        self.player_neighbours = player_neighbours
+        self.art_style: int = None
+        self.wraparound: int = None
+        self.pop_balancing: int = None
+        self.site_frequency: int = None
+        self.vanilla_nations: list = list()
+        self.custom_nations: list = list()
+        self.generic_nations: list = list()
+        self.age: int = 0
+        self.disciples: bool = False
+        self.omniscience: bool = False
 
-        # Info about nations/age
-        if nations is None:
-            nations = []
-        if custom_nations is None:
-            custom_nations = []
-        if age is None:
-            age = 2
-            
-        self.nations = nations
-        self.custom_nations = custom_nations
-        self.age = age
-        self.omniscience = omniscience
-        self.base_radius = 0.5
+    def load_file(self, filename):
 
-    def read_settings_file(self, filename):
+        self.__init__(self.index)  # Reset class
 
         with open(filename, 'r') as f:
             for _ in f.readlines():
-                if _[0] != '#':
-                    continue
+                if _[0] == '#':  # Only do anything if the line starts with a command tag
+                    _ = _.split()
+                    attribute = _[0].strip('#')
+                    if attribute == 'vanilla_nation':
+                        self.vanilla_nations.append([int(_[1]), int(_[2])])
+                    elif attribute == 'custom_nation':
+                        self.custom_nations.append([int(_[1]), str(_[2]), str(_[3]), int(_[4]), int(_[5]), int(_[6]), int(_[7]), int(_[8])])
+                    elif attribute == 'generic_nation':
+                        self.generic_nations.append([int(_[1]), int(_[2]), int(_[3]), int(_[4]), int(_[5])])
+                    else:
+                        try:
+                            setattr(self, attribute, int(_[1]))
+                            continue
+                        except ValueError:
+                            pass
+                        try:
+                            setattr(self, attribute, _[1])
+                            continue
+                        except ValueError:
+                            pass
+                        raise Exception(f'Input error in settings file: {attribute}')
 
-                _ = _.split()
+    def save_file(self, filename):
 
-                if _[0] == '#seed':
-                    self.seed = _[1]
-                if _[0] == '#map_title':
-                    self.map_title = _[1]
-                if _[0] == '#wraparound':
-                    self.wraparound = int(_[1])
-                if _[0] == '#art_style':
-                    self.art_style = int(_[1])
+        with open(filename, 'w') as f:  # Writes all the settings to a file
+            for attribute in self.__dict__:
+                if attribute == 'nations':
+                    for i in getattr(self, attribute):
+                        f.write(f'#nation {i[0]} {i[1]}\n')
+                elif attribute == 'custom_nations':
+                    for i in getattr(self, attribute):
+                        f.write(f'#customnation {i[0]} {i[1]}\n')
+                else:
+                    f.write(f'#{attribute} %{getattr(self, attribute)}\n')
 
-                if _[0] == '#variance':
-                    self.variance = float(_[1])
-                if _[0] == '#pop_balancing':
-                    self.pop_balancing = int(_[1])
-                if _[0] == '#site_frequency':
-                    self.site_frequency = int(_[1])
-                if _[0] == '#water_province_size':
-                    self.water_province_size = float(_[1])
-                if _[0] == '#cave_province_size':
-                    self.cave_province_size = float(_[1])
-                if _[0] == '#cap_connections':
-                    self.cap_connections = int(_[1])
-                if _[0] == '#homeland_size':
-                    self.homeland_size = int(_[1])
-                if _[0] == '#periphery_size':
-                    self.periphery_size = int(_[1])
-                if _[0] == '#throne_sites':
-                    self.throne_sites = int(_[1])
-                if _[0] == '#player_neighbours':
-                    self.player_neighbours = int(_[1])
-                if _[0] == '#nation':
-                    self.nations.append(int(_[1]))
-                if _[0] == '#customnation':
-                    self.custom_nations.append([int(_[1]), str(_[2]), str(_[3]), int(_[4]), int(_[5]), int(_[6]), int(_[7])])
-                if _[0] == '#age':
-                    self.age = int(_[1])
-                if _[0] == '#omniscience':
-                    self.omniscience = True
+    def __str__(self):
+
+        string = f'\nType - {type(self)}\n\n'
+        for key in self.__dict__:
+            string += f'{key} : {self.__dict__[key]}\n'
+
+        return string
