@@ -8,6 +8,7 @@ import matplotlib.cm as cm                  # Optional
 import matplotlib.pyplot as plt             # Optional
 import numpy as np                          # Critical
 import scipy as sc                          # Divest
+import scipy.cluster.vq as sccvq
 import random as rd                         # Divest
 import networkx as ntx                      # Divest
 import minorminer as mnm                    # Divest

@@ -19,7 +19,7 @@ class Nation:
             if entry[0] == self.index:
                 self.terrain_profile = entry[1]
                 self.layout = entry[2]
-                self.cap_terrain = entry[3]
+                self.terrain = entry[3]
                 self.home_plane = entry[4]
 
     def __str__(self):  # Printing the class returns this
@@ -53,6 +53,7 @@ class GenericNation:
         self.terrain, terrain_index, layout_index, self.home_plane, self.team = generic_nation_data
         self.terrain_profile = TERRAIN_PREFERENCES[terrain_index]
         self.layout = LAYOUT_PREFERENCES[layout_index]
+        self.name = 'Generic Nation'
 
     def __str__(self):  # Printing the class returns this
 

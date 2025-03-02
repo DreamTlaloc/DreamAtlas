@@ -43,7 +43,7 @@ def _jump_flood_algorithm(pixel_matrix: np.array,
                     if p == q or q == 0:
                         continue
                     q_vector = np.subtract(ping_vector_matrix[rx, ry], n)
-                    q_dist = np.linalg.norm(q_vector, ord=shape_array[q])
+                    q_dist = np.linalg.norm(q_vector, ord=shape_array[q-1])
                     if p == 0:  # if our pixel is empty, populate it with q
                         pong_distance_matrix[x, y] = q_dist
                         pong_vector_matrix[x, y] = q_vector
@@ -66,7 +66,7 @@ def _jump_flood_algorithm(pixel_matrix: np.array,
     return ping_matrix, ping_distance_matrix, ping_vector_matrix
 
 
-def find_pixel_ownership(coordinates_dict: dict,
+def find_pixel_ownership(coordinates_array: np.array,
                          map_size: np.array,
                          shapes: dict,
                          hwrap: bool = True,
@@ -79,19 +79,18 @@ def find_pixel_ownership(coordinates_dict: dict,
     small_x_size = int(map_size[0] / scale_down)
     small_y_size = int(map_size[1] / scale_down)
     small_matrix = np.zeros((small_x_size, small_y_size), dtype=np.uint16)
-    dict_size = int(max(coordinates_dict)) + 1
+    dict_size = len(coordinates_array)
 
     shape_array = np.full(dict_size, 2, dtype=np.float32)
     s_distance_matrix = np.full((small_x_size, small_y_size), np.inf, dtype=np.float32)
     s_vector_matrix = np.zeros((small_x_size, small_y_size, 2), dtype=np.float32)
-    for point in coordinates_dict:
-        point = int(point)
-        x, y = coordinates_dict[point]
+
+    for i, (x, y) in enumerate(coordinates_array):
         x_small = int((x / scale_down) % small_x_size)
         y_small = int((y / scale_down) % small_y_size)
-        small_matrix[x_small, y_small] = point
+        small_matrix[x_small, y_small] = i+1
         s_distance_matrix[x_small, y_small] = 0
-        shape_array[point] = shapes[point]
+        shape_array[i] = shapes[i+1]
 
     small_output_matrix, small_distance_matrix, small_vector_matrix = _jump_flood_algorithm(small_matrix,
                                                                                             step_size=2 ** (int(1 + np.log(max(map_size) / scale_down))),
@@ -107,11 +106,10 @@ def find_pixel_ownership(coordinates_dict: dict,
     final_distance_matrix = sc.ndimage.zoom(small_distance_matrix * scale_down, zoom=zoom, order=0, output=np.float32)[:map_size[0], :map_size[1]]
     final_vector_matrix = sc.ndimage.zoom(small_vector_matrix * scale_down, zoom=[zoom[0], zoom[1], 1], order=0, output=np.float32)[:map_size[0], :map_size[1]]
 
-    for point in coordinates_dict:
-        x, y = coordinates_dict[point]
+    for i, (x, y) in enumerate(coordinates_array):
         x_final = int((map_size[0] + x) % map_size[0])
         y_final = int((map_size[1] + y) % map_size[1])
-        final_matrix[x_final, y_final] = point
+        final_matrix[x_final, y_final] = i+1
 
     final_matrix, _, __ = _jump_flood_algorithm(final_matrix,
                                                 step_size=2 ** (int(np.log(max(map_size)))),

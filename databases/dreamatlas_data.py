@@ -1,6 +1,5 @@
 import numpy as np
 import pathlib
-import ttkbootstrap as ttk
 
 # Terrain preference vector is the weighting for each type of terrain
 TERRAIN_PREF_BITS = [0, 16, 32, 64, 128, 256]
@@ -22,19 +21,34 @@ LAYOUT_PREFERENCES = [  # LAYOUT_PREF_XXXX = [cap terrain, cap provinces ratio, 
     [1, 0.0, 0.9],          # Island
     [0, 0.0, 0.8],          # Deeps
     [0, 0.1, 0.8],          # Shallows
-    [1, 0.7, 0.8]           # Lakes
+    [1, 0.9, 0.7]           # Lakes
 ]
 LAYOUT_PREF_LAND, LAYOUT_PREF_CAVE, LAYOUT_PREF_COAST, LAYOUT_PREF_ISLAND, LAYOUT_PREF_DEEPS, LAYOUT_PREF_SHALLOWS, LAYOUT_PREF_LAKES = LAYOUT_PREFERENCES
 
-# Blocker vector informs how different blockers are created
-BLOCKER_DETAILS = [  # BLOCKER_XXXX = [plane, terrain int, size]
-    [2, 4096 + 68719476736 + 576460752303423488, 4],       # Cave Wall
-    [1, 8392704, 4]                                        # Mountain Range
+REGION_TYPE = ['Throne', 'Homeland', 'Periphery', 'Water', 'Cave', 'Vast', 'Blocker']
+REGION_WATER_INFO = [
+    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_DEEPS, 0, 1],
+    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_DEEPS, 1, 1],
+    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_DEEPS, 3, 2],
+    [TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_DEEPS, 6, 3]
 ]
-BLOCKER_CAVE_WALL, BLOCKER_MOUNTAIN_RANGE = BLOCKER_DETAILS
 
-# Homelands format: [Nation index, terrain preference, layout preference, capital terrain int, plane]
-HOMELANDS_INFO = [
+REGION_CAVE_INFO = [
+    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 0, 1],
+    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 1, 1],
+    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 3, 1],
+    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 5, 4]
+]
+
+REGION_VAST_INFO = [0, 0, 0, 0, 0, 0]
+
+# Blocker vector informs how different blockers are created
+REGION_BLOCKER_INFO = {  # BLOCKER_XXXX = [plane, terrain int, region_size, anchor_connections]
+    6: [1, 8392704, 3, 2],                                      # Mountain Range
+    8: [2, 4096 + 68719476736 + 576460752303423488, 7, 6]       # Cave Wall
+}
+
+HOMELANDS_INFO = [  # Homelands format: [Nation index, terrain preference, layout preference, capital terrain int, plane]
     # EA NATIONS
     [5, TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 0, 1],             # Arcoscephale
     [6, TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 0, 1],             # Mekone
@@ -97,7 +111,7 @@ HOMELANDS_INFO = [
     [71, TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_LAND, 8388608, 1],     # Caelum
     [72, TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_LAND, 8388608, 1],     # Nazca
     [73, TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 0, 1],            # Mictlan
-    [74, TERRAIN_PREF_SWAMP, LAYOUT_PREF_CAVE, 4128, 2],            # Xibalba
+    [74, TERRAIN_PREF_SWAMP, LAYOUT_PREF_LAKES, 4128, 2],            # Xibalba
     [75, TERRAIN_PREF_SWAMP, LAYOUT_PREF_LAND, 32, 1],              # Ctis
     [76, TERRAIN_PREF_FOREST, LAYOUT_PREF_LAND, 0, 1],              # Machaka
     [77, TERRAIN_PREF_BALANCED, LAYOUT_PREF_ISLAND, 0, 1],          # Phaeacia
@@ -161,7 +175,7 @@ PERIPHERY_INFO = [
 ]
 
 TERRAIN_2_HEIGHTS_DICT = {0: 0, 4: -600, 16: 200, 32: 50, 64: 300, 128: 90, 256: 250, 2048: -200, 4096: 1000, 8388608: 500, 68719476736: -100}
-TERRAIN_2_SHAPES_DICT = {0: 1, 4: 2, 8: 0.9, 16: 0.9, 32: 1.1, 64: 2, 128: 2, 256: 0.7, 2048: 1, 4096: 1.2, 8388608: 1, 68719476736: 1}
+TERRAIN_2_SHAPES_DICT = {0: 1, 4: 1.1, 8: 0.9, 16: 0.9, 32: 1.1, 64: 1.2, 128: 1.2, 256: 0.9, 2048: 1, 4096: 1.1, 8388608: 1, 68719476736: 1}
 TERRAIN_POPULATION_ORDER = {0: 4, 16: 2, 32: 1, 64: 0, 128: 3, 256: 5}  # TERRAIN_PREF_XXXX = [plains, highlands, swamp, waste, forest, farm]
 
 # Connections config [Standard border, Mountain pass, River border, Impassable, Road, River bridge, Impassable mountain]
@@ -169,8 +183,7 @@ NEIGHBOUR_SPECIAL_WEIGHTS = [0.8, 0.05, 0.05, 0, 0.05, 0.02, 0.05, 0]
 
 # UNIVERSAL FUNCTIONS AND VARIABLES
 ########################################################################################################################
-ROOT_DIR = pathlib.Path(__file__).parent
-REGION_TYPE = ['Throne', 'Homeland', 'Periphery']
+ROOT_DIR = pathlib.Path(__file__).parent.parent
 AGES = ['Early Age', 'Middle Age', 'Late Age']
 
 CAPITAL_POPULATION = 40000
@@ -184,10 +197,13 @@ NEIGHBOURS_NO_WRAP = np.array([[0, 0]])
 NEIGHBOURS_X_WRAP = np.array([[0, 0], [1, 0], [-1, 0]])
 NEIGHBOURS_Y_WRAP = np.array([[0, 0], [0, 1], [0, -1]])
 NEIGHBOURS_FULL = np.array([[0, 0], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [0, -1], [-1, -1], [-1, 0]])
+NEIGHBOURS = [NEIGHBOURS_NO_WRAP, NEIGHBOURS_X_WRAP, NEIGHBOURS_Y_WRAP, NEIGHBOURS_FULL]
+
+PIXELS_PER_PROVINCE = 40000
 
 DATASET_GRAPHS = [[[] for i in range(7)] for d in range(17)]
 vertex, graph_dict = 0, dict()
-with open(ROOT_DIR / 'three_connected_graphs', 'r') as f:
+with open(ROOT_DIR / 'databases/three_connected_graphs', 'r') as f:
     for line in f.readlines():
         data = line.split()
         if not data:
@@ -200,7 +216,7 @@ with open(ROOT_DIR / 'three_connected_graphs', 'r') as f:
         graph_dict[int(data[0].strip(':'))] = [int(x) for x in data[1:]]
 
 PERIPHERY_DATA = []
-with open(ROOT_DIR / 'peripheries', 'r') as f:
+with open(ROOT_DIR / 'databases/peripheries', 'r') as f:
     for line in f.readlines():
         data = line.strip('\n')
         data = data.split('\t')

@@ -172,10 +172,11 @@ class HomelandRegion(Region):
         self.nation = nation
         self.terrain_pref = nation.terrain_profile
         self.layout = nation.layout
-        self.cap_terrain = nation.cap_terrain
+        self.terrain = nation.terrain
         self.plane = nation.home_plane
         self.region_size = self.settings.homeland_size
         self.anchor_connections = self.settings.cap_connections
+        self.name = nation.name
 
     def generate_graph(self, seed: int = None):
         dibber(self, seed)
@@ -190,7 +191,8 @@ class HomelandRegion(Region):
             if i == 0:  # Generating the anchor province
                 province.coordinates = [0, 0]
                 province.capital_location = True
-                province.special_capital = self.nation.index
+                if type(self.nation) is not GenericNation:
+                    province.special_capital = self.nation.index
 
             elif i <= self.anchor_connections:  # Generate the anchor connections, rotating randomly, then adding some small random angle/radius change
                 province.coordinates = np.asarray([np.cos(theta[i-1]), np.sin(theta[i-1])])
@@ -219,7 +221,7 @@ class HomelandRegion(Region):
             if i == 0:  # Anchor province
                 terrain_set.remove(512)  # Remove no start
                 terrain_set.add(67108864)  # Good start location
-                terrain_set.add(self.cap_terrain)  # Capital terrain
+                terrain_set.add(self.terrain)  # Capital terrain
 
             elif i <= self.anchor_connections:  # Circle provinces
                 terrain_set.add(terrain_picks[i])
@@ -245,6 +247,7 @@ class PeripheryRegion(Region):
         self.region_size = self.settings.periphery_size
         self.anchor_connections = self.settings.periphery_size - 1
         self.terrain_pref, self.layout = nations_2_periphery(nations)
+        self.name = f'{nations[0].name}-{nations[1].name} border'
 
 
 class ThroneRegion(Region):
@@ -253,6 +256,7 @@ class ThroneRegion(Region):
         super().__init__(index, settings, seed)
 
         self.terrain_pref, self.layout = TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND
+        self.name = f'Throne {index}'
 
     def generate_terrain(self, seed: int = None):  # This is the basic generate terrain, specific region types differ
         dibber(self, seed)
@@ -269,24 +273,44 @@ class WaterRegion(Region):
     def __init__(self, index: int, settings: DreamAtlasSettings, seed: int = None):
         super().__init__(index, settings, seed)
 
+        self.terrain_pref, self.layout, self.region_size, self.anchor_connections = REGION_WATER_INFO[settings.water_region_type]
+        self.name = f'Sea {index}'
+
 
 class CaveRegion(Region):
 
     def __init__(self, index: int, settings: DreamAtlasSettings, seed: int = None):
         super().__init__(index, settings, seed)
 
-        self.terrain_pref = TERRAIN_PREF_BALANCED
-        self.layout = LAYOUT_PREF_CAVE
-        self.cap_terrain = 4096
+        self.terrain = 4096
         self.plane = 2
-        self.region_size = 2
-        self.anchor_connections = 1
+        self.terrain_pref, self.layout, self.region_size, self.anchor_connections = REGION_CAVE_INFO[settings.cave_region_type]
+        self.name = f'Cave {index}'
 
 
 class VastRegion(Region):
 
     def __init__(self, index: int, settings: DreamAtlasSettings, seed: int = None):
         super().__init__(index, settings, seed)
+
+        self.terrain = rd.choice(REGION_VAST_INFO)
+        self.name = f'Vast {index}'
+
+    def generate_terrain(self, seed: int = None):  # This is the basic generate terrain, specific region types differ
+        dibber(self, seed)
+
+        for i in range(self.region_size):  # Apply the terrain and land/sea/cave tags to each province
+            province = self.provinces[i]
+            province.terrain_int = self.terrain
+
+    def generate_population(self, seed: int = None):
+
+        if self.settings.pop_balancing == 0:  # No population balancing
+            return
+
+        for i, province in enumerate(self.provinces):
+            province.has_commands = True
+            province.population = 0
 
 
 class BlockerRegion(Region):
@@ -295,18 +319,14 @@ class BlockerRegion(Region):
         super().__init__(index, settings, seed)
 
         self.blocker = blocker
-
-        if blocker == 0:
-            self.plane, self.terrain_pref, self.region_size = BLOCKER_CAVE_WALL
-
-        self.anchor_connections = self.region_size - 1
+        self.plane, self.terrain, self.region_size, self.anchor_connections = REGION_BLOCKER_INFO[blocker]
 
     def generate_terrain(self, seed: int = None):  # This is the basic generate terrain, specific region types differ
         dibber(self, seed)
 
         for i in range(self.region_size):  # Apply the terrain and land/sea/cave tags to each province
             province = self.provinces[i]
-            province.terrain_int = self.terrain_pref
+            province.terrain_int = self.terrain
 
     def generate_population(self, seed: int = None):
 

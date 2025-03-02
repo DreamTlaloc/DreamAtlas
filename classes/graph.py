@@ -1,10 +1,12 @@
 import numpy as np
+import scipy as sc
 import minorminer as mnm
 import networkx as ntx
 import random as rd
 from numba import njit, prange
 from numba.experimental import jitclass
-from scipy.special import y1_zeros
+
+from DreamAtlas.databases import NEIGHBOURS_FULL
 
 
 @njit(parallel=True)
@@ -15,7 +17,6 @@ def _numba_attractor_adjustment(graph: np.array,
                                 damping_ratio: float,
                                 map_size: np.array,
                                 iterations: int):
-
     dict_size = len(coordinates)
     net_velocity = np.zeros((dict_size, 2), dtype=np.float64)
     for _ in range(iterations):
@@ -29,7 +30,7 @@ def _numba_attractor_adjustment(graph: np.array,
 
         equilibrium = 1
         for c in range(dict_size):  # Check if particles are within tolerance
-            if np.linalg.norm(net_velocity[c]) > 0.001:
+            if np.linalg.norm(net_velocity[c]) > 0.00001:
                 equilibrium = 0
                 break
 
@@ -39,7 +40,7 @@ def _numba_attractor_adjustment(graph: np.array,
                 if not (0 <= coordinates[a, axis] < map_size[axis]):
                     dart_change = -np.sign(coordinates[a, axis])
                     # print(dart_change, coordinates[a, axis], coordinates[a, axis] % map_size[axis])
-                    coordinates[a, axis] = coordinates[a, axis] % map_size[axis]
+                    coordinates[a, axis] = coordinates[a, axis] % map_size[axis] - 25 * dart_change
 
                     for b in range(dict_size):  # Iterating over all of this vertex's connections
                         if graph[a, b]:
@@ -85,7 +86,7 @@ def _numba_spring_adjustment(graph: np.array,
 
         equilibrium = 1
         for c in range(dict_size):  # Check if particles are within tolerance
-            if np.linalg.norm(net_velocity[c]) > 0.0001:
+            if np.linalg.norm(net_velocity[c]) > 0.001:
                 equilibrium = 0
                 break
 
@@ -104,8 +105,8 @@ def _numba_spring_adjustment(graph: np.array,
                             if new_value > 1:
                                 new_value = -1
 
-                            darts[a, b, axis] = int(new_value)  # Setting the dart for this vertex
-                            darts[b, a, axis] = int(-new_value)  # Setting the dart for other vertex
+                            darts[a, b, axis] = new_value  # Setting the dart for this vertex
+                            darts[b, a, axis] = -new_value  # Setting the dart for other vertex
         if equilibrium:
             break
 
@@ -115,14 +116,38 @@ def _numba_spring_adjustment(graph: np.array,
 # @jitclass
 class DreamAtlasGraph:
 
-    def __init__(self, size, map_size):
+    def __init__(self, size, map_size, wraparound):
 
         self.size = size
         self.graph = np.zeros((size, size), dtype=np.bool_)
         self.coordinates = np.zeros((size, 2), dtype=np.int32)
         self.darts = np.zeros((size, size, 2), dtype=np.int8)
         self.weights = np.ones(size, dtype=np.float32)
+        self.planes = np.ones(size, dtype=np.int8)
         self.map_size = map_size
+        self.wraparound = wraparound
+
+        self.plot_colour = ['r*' for _ in range(size)]  # Exclusively for plotting purposes
+
+    def get_node_connections(self, i):
+        return np.argwhere(self.graph[i, :] == 1)
+
+    def get_all_connections(self):
+        return np.argwhere(self.graph == 1)
+
+    def get_vector(self, i, j):
+        return self.coordinates[j] + self.darts[i, j] * self.map_size - self.coordinates[i]
+
+    def get_length(self, i, j):
+        return np.linalg.norm(self.get_vector(i, j))
+
+    def get_min_dist(self):
+        min_dist = np.inf
+        for i, j in self.get_all_connections():
+            dist = self.get_length(i, j)
+            if dist < min_dist:
+                min_dist = dist
+        return min_dist
 
     def disconnect_nodes(self, i, j):
 
@@ -131,60 +156,75 @@ class DreamAtlasGraph:
         self.darts[i, j] = np.zeros(2, dtype=np.int8)
         self.darts[i, j] = np.zeros(2, dtype=np.int8)
 
-    def connect_nodes(self, i, j):  # Connects nodes i, j with the closest dart
+    def connect_nodes(self, i, j):  # Connects nodes i, j
 
         self.graph[i, j] = 1
         self.graph[j, i] = 1
 
-    def insert_node(self, i, j, k):  # Inserts a new node k between two existing nodes i, j
+    def insert_connection(self, i, j, k):  # Inserts a new node k between two existing nodes i, j
 
-        self.graph[i, j] = 0
-        self.graph[j, i] = 0
         self.graph[i, k] = 1
         self.graph[k, i] = 1
         self.graph[j, k] = 1
         self.graph[k, j] = 1
 
-        self.coordinates[k] = 0.5 * (self.coordinates[j] + self.darts[i, j] * self.map_size + self.coordinates[i])  # Find the coordinate between i, j
+        vector = self.coordinates[j] + self.darts[i, j] * self.map_size - self.coordinates[i]
+        self.coordinates[k] = np.mod(self.coordinates[i] + 0.5 * vector, self.map_size)   # Find the coordinate between i, j
 
-        new_dart = np.zeros(2, dtype=np.int8)
+        i_dart, j_dart = np.zeros(2, dtype=np.int8), np.zeros(2, dtype=np.int8)
+
         for axis in [0, 1]:
-            if self.map_size[axis] < self.coordinates[k][axis] or self.coordinates[k][axis] < 0:
-                new_dart[axis] = np.sign(self.coordinates[k][axis])
+            if not (0 <= self.coordinates[i][axis] + 0.5 * vector[axis] < self.map_size[axis]):
+                i_dart[axis] = np.sign(self.coordinates[i][axis] + 0.5 * vector[axis])
+            if not (0 <= self.coordinates[j][axis] - 0.5 * vector[axis] < self.map_size[axis]):
+                j_dart[axis] = np.sign(self.coordinates[j][axis] - 0.5 * vector[axis])
 
-        self.coordinates[k] = np.mod(self.coordinates[k], self.map_size)
+        self.darts[i, k] = i_dart
+        self.darts[k, i] = -i_dart
+        self.darts[j, k] = j_dart
+        self.darts[k, j] = -j_dart
+        self.disconnect_nodes(i, j)
 
-        self.darts[i, j] = np.zeros(2, dtype=np.int8)
-        self.darts[j, i] = np.zeros(2, dtype=np.int8)
-        self.darts[i, k] = new_dart
-        self.darts[k, j] = -new_dart
+    def insert_face(self, face, k, r):
 
-    def get_node_connections(self, i):
-        return np.argwhere(self.graph[i, :] == 1)
+        self.coordinates[k] = r
 
-    def get_all_connections(self):
-        return np.argwhere(self.graph == 1)
+        for i, _ in face:
+            self.connect_nodes(i, k)
 
-    def get_length(self, i, j):
-        return np.linalg.norm(self.coordinates[j] + self.darts[i, j] * self.map_size - self.coordinates[i])
+            min_dist = np.inf
+            for n in NEIGHBOURS_FULL:
+                v_vector = self.coordinates[i] + n * self.map_size - self.coordinates[k]
+                dist = np.linalg.norm(v_vector)
+                if dist < min_dist:
+                    min_dist = dist
+                    vector = v_vector
 
-    def get_faces_centroids(self):
+            i_dart = np.zeros(2, dtype=np.int8)
+            for axis in [0, 1]:
+                if not (0 <= self.coordinates[k][axis] + vector[axis] < self.map_size[axis]):
+                    i_dart[axis] = np.sign(self.coordinates[k][axis] + vector[axis])
+
+            self.darts[k, i] = i_dart
+            self.darts[i, k] = -i_dart
+
+    def get_faces_centroids(self, planes=[1, 2]):
 
         edges_set, embedding = set(), dict()
         for i in range(self.size):  # edges_set is an undirected graph as a set of undirected edges
             j_angles = list()
             connections = self.get_node_connections(i)
-            if len(connections) == 0:
-                continue
-            for j in connections:
-                j = j[0]
-                edges_set |= {(i, j), (j, i)}
-                vector = self.coordinates[j] + self.darts[i, j] * self.map_size - self.coordinates[i]
-                angle = 90 - np.angle(vector[0] + vector[1] * 1j, deg=True)
-                j_angles.append([j, angle])
+            if len(connections) > 0:
+                for j in connections:
+                    if self.planes[j] in planes:
+                        j = j[0]
+                        edges_set |= {(i, j), (j, i)}
+                        vector = self.get_vector(i, j)
+                        angle = 90 - np.angle(vector[0] + vector[1] * 1j, deg=True)
+                        j_angles.append([j, angle])
 
-            j_angles.sort(key=lambda x: x[1])
-            embedding[i] = [x[0] for x in j_angles]  # Format: v1:[v2,v3], v2:[v1], v3:[v1] clockwise ordering of neighbors at each vertex
+                j_angles.sort(key=lambda x: x[1])
+                embedding[i] = [x[0] for x in j_angles]  # Format: v1:[v2,v3], v2:[v1], v3:[v1] clockwise ordering of neighbors at each vertex
 
         faces, path = list(), list()  # Storage for face paths
         first_path = (0, embedding[0][0])
@@ -210,11 +250,10 @@ class DreamAtlasGraph:
 
         centroids = list()
         for face in faces:
-            shift = np.subtract(np.divide(self.map_size, 2), self.coordinates[face[0][0]])
+            shift = np.divide(self.map_size, 2) - self.coordinates[face[0][0]]
             total = np.zeros(2)
-            for edge in face:
-                i = edge[0]
-                total += (np.add(self.coordinates[i], shift)) % self.map_size
+            for i, j in face:
+                total += (self.coordinates[i] + shift) % self.map_size
             coordinate = (-shift + total / len(face)) % self.map_size
             centroids.append((int(coordinate[0]), int(coordinate[1])))
 
@@ -236,7 +275,7 @@ class DreamAtlasGraph:
                     x_coord = int(((x + connection[0]) % size[0]) * scale_down)
                     y_coord = int(((y + connection[1]) % size[1]) * scale_down)
                     h_dict[(int(x * scale_down), int(y * scale_down))].append((x_coord, y_coord))
-        h_graph = ntx.Graph(incoming_graph_data=h_dict)   # H graph
+        h_graph = ntx.Graph(incoming_graph_data=h_dict)  # H graph
         s_graph = ntx.Graph(incoming_graph_data=s_graph)  # S graph
 
         for i in range(10):
@@ -252,21 +291,21 @@ class DreamAtlasGraph:
         # Form the subgraph of the target graph
         subgraph_nodes, node_2_r, node_2_a, counter = list(), dict(), dict(), 0
         a_2_r = dict()
-        for i in range(1, 1+len(s_graph)):
+        for i in range(1, 1 + len(s_graph)):
             for node in initial_embedding[i]:
-                node_2_r[node] = i          # Node to real index
-                node_2_a[node] = counter    # Node to attractor index
-                a_2_r[counter] = i          # Attractor index to real index
+                node_2_r[node] = i  # Node to real index
+                node_2_a[node] = counter  # Node to attractor index
+                a_2_r[counter] = i-1  # Attractor index to real index
                 counter += 1
                 subgraph_nodes.append(node)
         subgraph = h_graph.subgraph(subgraph_nodes)
 
         # Build the graph for attractor adjustment from the subgraph
         attractor_graph = np.zeros((len(subgraph), len(subgraph)), dtype=np.bool_)
-        attractor_coordinates =  np.zeros((len(subgraph), 2), dtype=np.float64)
+        attractor_coordinates = np.zeros((len(subgraph), 2), dtype=np.float64)
         attractor_darts = np.zeros((len(subgraph), len(subgraph), 2), dtype=np.int8)
 
-        for i in range(1, 1+len(s_graph)):
+        for i in range(1, 1 + len(s_graph)):
             for node in initial_embedding[i]:  # Loop over all the embedded nodes in the subgraph
                 attractor_coordinates[node_2_a[node]] = [node[0], node[1]]
 
@@ -285,39 +324,149 @@ class DreamAtlasGraph:
             if a_2_r[i] == a_2_r[j]:
                 attractor_array[i, j] = 1
 
-        attractor_coordinates, attractor_darts = _numba_attractor_adjustment(attractor_graph, attractor_coordinates, attractor_darts, attractor_array, damping_ratio=0.5, map_size=self.map_size, iterations=1000)
+        attractor_coordinates, attractor_darts = _numba_attractor_adjustment(attractor_graph, attractor_coordinates,
+                                                                             attractor_darts, attractor_array,
+                                                                             damping_ratio=0.314, map_size=self.map_size,
+                                                                             iterations=3000)
 
-        for i in range(1, 1+len(s_graph)):  # Merge the alike vertices of the graph
+        for i in range(1, 1 + len(s_graph)):  # Merge the alike vertices of the graph
             coordinate_sum = 0
-            coordinates_offset = np.subtract(np.divide(self.map_size, 2), attractor_coordinates[node_2_a[initial_embedding[i][0]]])
+            coordinates_offset = np.divide(self.map_size, 2) - attractor_coordinates[node_2_a[initial_embedding[i][0]]]
             for node in initial_embedding[i]:  # Loop over all the nodes for this vertex
-                coordinate_sum += np.mod(np.add(coordinates_offset, attractor_coordinates[node_2_a[node]]), self.map_size)
-            self.coordinates[i-1] = np.mod(np.subtract(np.divide(coordinate_sum, len(initial_embedding[i])), coordinates_offset), self.map_size)
+                coordinate_sum += np.mod(coordinates_offset + attractor_coordinates[node_2_a[node]], self.map_size)
+            self.coordinates[i - 1] = np.mod(np.subtract(coordinate_sum / len(initial_embedding[i]), coordinates_offset), self.map_size)
 
         dart_dict, dist_dict = dict(), dict()
         for i, j in np.argwhere(attractor_graph == 1):
-            dist_dict[a_2_r[i]-1, a_2_r[j]-1] = np.inf
+            dist_dict[(a_2_r[i], a_2_r[j])] = np.inf
 
         for i, j in np.argwhere(attractor_graph == 1):
-            if a_2_r[i] != a_2_r[j]:
-                distance = np.linalg.norm(self.coordinates[a_2_r[j]-1] - attractor_darts[i, j] * self.map_size - self.coordinates[a_2_r[i]-1])
-                if distance < dist_dict[a_2_r[i]-1, a_2_r[j]-1]:
-                    dist_dict[a_2_r[i] - 1, a_2_r[j] - 1] = distance
-                    dart_dict[(a_2_r[i]-1, a_2_r[j]-1)] = attractor_darts[i, j]
-                    print(a_2_r[i] - 1, a_2_r[j] - 1, distance, attractor_darts[i, j])
+            k = a_2_r[i]
+            l = a_2_r[j]
+            if k != l:
+                distance = np.linalg.norm(self.coordinates[l] + attractor_darts[i, j] * self.map_size - self.coordinates[k])
+                if distance < dist_dict[(k, l)]:
+                    dist_dict[(k, l)] = distance
+                    dart_dict[(k, l)] = attractor_darts[i, j]
 
-        done_edges = set()
         for i, j in self.get_all_connections():  # Set the darts for the graph
-            if (j, i) not in done_edges:
-                done_edges.add((i, j))
-                self.darts[i, j] = dart_dict[(i, j)]
-                self.darts[j, i] = -dart_dict[(i, j)]
+            self.darts[i, j] = dart_dict[(i, j)]
+
+    def make_delaunay_graph(self, planes=[1, 2]):
+
+        def less_first(a, b):
+            return [a, b] if a < b else [b, a]
+
+        points, key_list, counter = list(), dict(), 0
+        for i in range(self.size):  # Set up the virtual points on the toroidal plane
+            if self.planes[i] in planes:
+                for j, n in enumerate(self.wraparound):
+                    coordinate = self.coordinates[i] + n * self.map_size
+                    points.append([coordinate[0], coordinate[1]])
+                    key_list[counter] = i
+                    counter += 1
+
+        tri = sc.spatial.Delaunay(np.array(points), qhull_options='QJ')
+
+        list_of_edges = list()
+        for triangle in tri.simplices:
+            for e1, e2 in [[0, 1], [1, 2], [2, 0]]:  # for all edges of triangle
+                list_of_edges.append(less_first(triangle[e1], triangle[e2]))  # always lesser index first
+
+        for p1, p2 in np.unique(list_of_edges, axis=0):  # remove duplicates
+            i, j = key_list[p1], key_list[p2]
+            i_c = tri.points[p1]
+            if (0 <= i_c[0] < self.map_size[0]) and (0 <= i_c[1] < self.map_size[1]):  # only do this for nodes in the map
+                self.connect_nodes(i, j)
+                j_c = tri.points[p2]
+
+                dart = np.zeros(2, dtype=np.int8)
+                for axis in range(2):
+                    if j_c[axis] < 0:
+                        dart[axis] = -1
+                    elif j_c[axis] >= self.map_size[axis]:
+                        dart[axis] = 1
+                self.darts[i, j] = dart
+                self.darts[j, i] = -dart
 
     def spring_adjustment(self):
-        ratios = np.array((0.1, 0.5, 20), dtype=np.float32)
-        iterations = 50
-        _coordinates, _darts = _numba_spring_adjustment(self.graph, self.coordinates.astype(dtype=np.float64), self.darts, self.weights, self.map_size, ratios, self.get_all_connections(), iterations)
+        ratios = np.array((0.1, 0.5, 30), dtype=np.float32)
+        iterations = 3 * self.size
+        _coordinates, _darts = _numba_spring_adjustment(self.graph, self.coordinates.astype(dtype=np.float64),
+                                                        self.darts, self.weights, self.map_size, ratios,
+                                                        self.get_all_connections(), iterations)
         self.coordinates, self.darts = _coordinates.astype(dtype=np.int32), _darts.astype(dtype=np.int8)
+
+    def get_virtual_graph(self):
+
+        virtual_size = self.size
+        for i, j in self.get_all_connections():
+            virtual_size += np.count_nonzero(self.darts[i, j])
+        virtual_size = int(virtual_size)
+
+        virtual_graph = np.zeros((virtual_size, virtual_size), dtype=np.bool_)
+        virtual_coordinates = np.zeros((virtual_size, 2), dtype=np.int32)
+
+        for i in range(self.size):
+            virtual_coordinates[i] = self.coordinates[i]
+
+        k = len(self.coordinates)
+        done_edges = set()
+        for i, j in self.get_all_connections():
+            if (i, j) not in done_edges:  # If we haven't done this connection continue
+                done_edges.add((j, i))
+
+                dart_x, dart_y = self.darts[i, j]
+
+                if dart_x == 0 and dart_y == 0:  # If the connection does not cross the torus then just add the edge
+                    virtual_graph[i, j] = 1
+                    virtual_graph[j, i] = 1
+                else:  # Otherwise we need to find the virtual coordinates
+                    vector = self.get_vector(i, j)
+
+                    infinite_coordinates = list()  # Find the infinite edge points
+                    for axis in range(2):
+                        if self.darts[i, j][axis] == -1:
+                            ic = 0
+                        elif self.darts[i, j][axis] == 1:
+                            ic = self.map_size[axis]
+                        else:
+                            continue
+                        if axis == 0:
+                            infinite_coordinates.append([ic, self.coordinates[i, 1] + (ic - self.coordinates[i, 0]) * vector[1] / vector[0]])
+                        else:
+                            infinite_coordinates.append([self.coordinates[i, 0] + (ic - self.coordinates[i, 1]) * vector[0] / vector[1], ic])
+
+                    if len(infinite_coordinates) == 2:  # Find which is closer and build virtual graph
+                        virtual_graph[i, k] = 1  # 1st node to 1st edge
+                        virtual_graph[k, i] = 1
+
+                        virtual_graph[k+1, k+2] = 1  # 1st edge to 2nd edge
+                        virtual_graph[k+2, k+1] = 1
+                        if np.linalg.norm(np.subtract(self.coordinates[i], infinite_coordinates[0])) > np.linalg.norm(np.subtract(self.coordinates[i], infinite_coordinates[1])):  # seeing which is closer
+                            infinite_coordinates = [infinite_coordinates[1], infinite_coordinates[0]]
+                            virtual_coordinates[k+1] = [infinite_coordinates[0][0], infinite_coordinates[0][1] - dart_y * self.map_size[1]]
+                            virtual_coordinates[k+2] = [infinite_coordinates[1][0], infinite_coordinates[1][1] - dart_y * self.map_size[1]]
+                        else:
+                            infinite_coordinates = [infinite_coordinates[0], infinite_coordinates[1]]
+                            virtual_coordinates[k+1] = [infinite_coordinates[0][0] - dart_x * self.map_size[0], infinite_coordinates[0][1]]
+                            virtual_coordinates[k+2] = [infinite_coordinates[1][0] - dart_x * self.map_size[0], infinite_coordinates[1][1]]
+                        virtual_coordinates[k] = infinite_coordinates[0]
+
+                        virtual_graph[k+3, j] = 1  # 2nd edge to 2nd node
+                        virtual_graph[j, k+3] = 1
+                        virtual_coordinates[k+3] = [infinite_coordinates[1][0] - dart_x * self.map_size[0], infinite_coordinates[1][1] - dart_y * self.map_size[1]]
+                    else:
+                        virtual_graph[i, k] = 1  # Vertex to edge
+                        virtual_graph[k, i] = 1
+                        virtual_coordinates[k] = infinite_coordinates[0]
+                        virtual_graph[k+1, j] = 1  # Edge to connection
+                        virtual_graph[j, k+1] = 1
+                        virtual_coordinates[k+1] = [infinite_coordinates[0][0] - dart_x * self.map_size[0], infinite_coordinates[0][1] - dart_y * self.map_size[1]]
+
+                    k += 2 * len(infinite_coordinates)
+
+        return virtual_graph, virtual_coordinates
 
     def plot(self):
 
@@ -327,71 +476,18 @@ class DreamAtlasGraph:
         for i, j in self.get_all_connections():
             x1, y1 = self.coordinates[i]
             x2, y2 = self.coordinates[j] + self.darts[i, j] * self.map_size
-            ax.plot((x1, x2), (y1, y2), 'k-')
 
-        ax.scatter(self.coordinates[:, 0], self.coordinates[:, 1], c='r')
+            colour = 'k-'
+            if self.planes[i] != self.planes[j]:
+                colour = 'k--'
+
+            ax.plot((x1, x2), (y1, y2), colour)
+
+        for i, (x, y) in enumerate(self.coordinates):
+            ax.plot(x, y, self.plot_colour[i])
+            ax.text(x+5, y+5, s=f'{i}')
+
         ax.set(xlim=(0, self.map_size[0]), ylim=(0, self.map_size[1]))
-        plt.show()
+        ax.set_aspect('equal')
 
-    # def get_virtual_graph(self):
-    #
-    #     virtual_size = self.size + len(np.argwhere(self.darts != np.zeros(2)))
-    #     virtual_graph = np.zeros((virtual_size, virtual_size), dtype=np.bool_)
-    #     virtual_coordinates = np.zeros((virtual_size, 2), dtype=np.int32)
-    #
-    #     k = self.size
-    #     for i in range(self.size):
-    #         connections = self.get_node_connections(i)
-    #         if len(connections) == 0:
-    #             continue
-    #         for j in connections:
-    #             j = j[0]
-    #
-    #             if self.darts[i, j] == np.zeros(2):  # If the connection does not cross the torus then just add the edge
-    #                 virtual_graph[i, j] = 1
-    #             else:                                # Otherwise we need to find the virtual coordinates
-    #                 vector = self.coordinates[j] + self.darts[i, j] * self.map_size - self.coordinates[i]
-    #                 unit_vector = vector / np.linalg.norm(vector)
-    #
-    #                 infinite_coordinates = list()  # Find the infinite edge points
-    #                 for axis in range(2):
-    #                     if self.darts[i, j][axis] == -1:
-    #                         ic = 0
-    #                     elif self.darts[i, j][axis] == 1:
-    #                         ic = self.map_size[axis]
-    #                     else:
-    #                         continue
-    #                     if axis == 0:
-    #                         infinite_coordinates.append([ic, self.coordinates[i][1] + (ic - self.coordinates[i][0]) * unit_vector[1] / unit_vector[0]])
-    #                     else:
-    #                         infinite_coordinates.append([self.coordinates[i][0] + (ic - self.coordinates[i][1]) * unit_vector[0] / unit_vector[1], ic])
-    #
-    #                 if len(infinite_coordinates) == 2:  # Find which is closer and build virtual graph
-    #                     virtual_graph[i, k] = 1
-    #                     virtual_coordinates[k] = infinite_coordinates[0]
-    #
-    #                     virtual_graph[k + 1] = [k + 2]  # 1st edge to 2nd edge
-    #                     virtual_graph[k + 2] = [k + 1]
-    #                     if np.linalg.norm(np.subtract(self.coordinates[i], infinite_coordinates[0])) > np.linalg.norm(np.subtract(self.coordinates[i], infinite_coordinates[1])):  # seeing which is closer
-    #                         infinite_coordinates = [infinite_coordinates[1], infinite_coordinates[0]]
-    #                         virtual_coordinates[k + 1] = [infinite_coordinates[0][0], infinite_coordinates[0][1] - dart_y * self.mapsize[1]]
-    #                         virtual_coordinates[k + 2] = [infinite_coordinates[1][0], infinite_coordinates[1][1] - dart_y * self.mapsize[1]]
-    #                     else:
-    #                         infinite_coordinates = [infinite_coordinates[0], infinite_coordinates[1]]
-    #                         virtual_coordinates[new_index + 1] = [infinite_coordinates[0][0] - dart_x * self.mapsize[0], infinite_coordinates[0][1]]
-    #                         virtual_coordinates[new_index + 2] = [infinite_coordinates[1][0] - dart_x * self.mapsize[0], infinite_coordinates[1][1]]
-    #
-    #                     virtual_graph[new_index + 3] = [j]  # 2nd edge to 2nd node
-    #                     virtual_graph[j].append(new_index + 3)
-    #                     virtual_coordinates[new_index + 3] = [infinite_coordinates[1][0] - dart_x * self.mapsize[0], infinite_coordinates[1][1] - dart_y * self.map_size[1]]
-    #                 else:
-    #                     virtual_graph[i].append(new_index)  # Vertex to edge
-    #                     virtual_graph[new_index] = [i]
-    #                     virtual_coordinates[new_index] = infinite_coordinates[0]
-    #                     virtual_graph[new_index + 1] = [j]  # Edge to connection
-    #                     virtual_graph[j].append(new_index + 1)
-    #                     virtual_coordinates[new_index + 1] = [infinite_coordinates[0][0] - dart_x * self.mapsize[0], infinite_coordinates[0][1] - dart_y * self.map_size[1]]
-    #
-    #                 new_index += 2 * len(infinite_coordinates)
-    #
-    #     return virtual_graph, virtual_coordinates
+        return ax

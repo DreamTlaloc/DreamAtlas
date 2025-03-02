@@ -178,89 +178,89 @@ class DominionsMap:
         self.height_map = [None for _ in range(10)]
         self.min_dist = [None for _ in range(10)]
         self.province_capital_locations = [[] for _ in range(10)]
+        self.wraparound = NEIGHBOURS_FULL
 
     def load_file(self, filepath, plane=1):  # Instructs the map class to load in a file.
 
-        file_type = filepath[-4:]
-
         if filepath.endswith('.map'):
-                with open(filepath, 'r') as f:
-                    current_province = 1
-                    lines = f.readlines()
-                    for line in lines:
-                        if line[0] != '#':
-                            continue
-                        line = line.split()
+            with open(filepath, 'r') as f:
+                current_province = 1
+                lines = f.readlines()
+                for line in lines:
+                    if line[0] != '#':
+                        continue
+                    line = line.split()
 
-                        if line[0] == '#setland':
-                            current_province = int(line[1])
+                    if line[0] == '#setland':
+                        current_province = int(line[1])
 
-                        if line[0] == '#dom2title':
-                            self.map_title = line[1]
-                        elif line[0] == '#imagefile':
-                            self.image_file[plane] = line[1]
-                        elif line[0] == '#mapsize':
-                            self.map_size[plane] = [int(line[1]), int(line[2])]
+                    if line[0] == '#dom2title':
+                        self.map_title = line[1]
+                    elif line[0] == '#imagefile':
+                        self.image_file[plane] = line[1]
+                    elif line[0] == '#mapsize':
+                        self.map_size[plane] = [int(line[1]), int(line[2])]
+                    elif line[0] == '#wraparound':
+                        self.wraparound = NEIGHBOURS[3]
+                    elif line[0] == '#domversion':
+                        self.dom_version = int(line[1])
+                    # if line[0] == '#winterimagefile':
+                    #     self.winter_image_file = line[1]
+                    elif line[0] == '#scenario':
+                        self.scenario = True
+                    elif line[0] == '#description':
+                        self.description = ' '.join(line[1:])
+                    elif line[0] == '#neighbour':
+                        self.neighbour_list[plane].append([int(line[1]), int(line[2])])
+                    elif line[0] == '#neighbourspec':
+                        self.special_neighbour_list[plane].append([int(line[1]), int(line[2]), int(line[3])])
+                    elif line[0] == '#gate':
+                        self.gate_list[plane].append([int(line[1]), int(line[2])])
+                    elif line[0] == '#pb':
+                        self.pixel_owner_list[plane].append([int(line[1]), int(line[2]), int(line[3]), int(line[4])])
+                    elif line[0] == '#landname':
+                        self.province_names_list[plane].append([int(line[1]), ' '.join(line[2:])])
 
-                        elif line[0] == '#domversion':
-                            self.dom_version = int(line[1])
-                        # if line[0] == '#winterimagefile':
-                        #     self.winter_image_file = line[1]
-                        elif line[0] == '#scenario':
-                            self.scenario = True
-                        elif line[0] == '#description':
-                            self.description = ' '.join(line[1:])
-                        elif line[0] == '#neighbour':
-                            self.neighbour_list[plane].append([int(line[1]), int(line[2])])
-                        elif line[0] == '#neighbourspec':
-                            self.special_neighbour_list[plane].append([int(line[1]), int(line[2]), int(line[3])])
-                        elif line[0] == '#gate':
-                            self.gate_list[plane].append([int(line[1]), int(line[2])])
-                        elif line[0] == '#pb':
-                            self.pixel_owner_list[plane].append([int(line[1]), int(line[2]), int(line[3]), int(line[4])])
-                        elif line[0] == '#landname':
-                            self.province_names_list[plane].append([int(line[1]), ' '.join(line[2:])])
+                    elif line[0] == '#terrain':
+                        self.terrain_list[plane].append([int(line[1]), int(line[2])])
 
-                        elif line[0] == '#terrain':
-                            self.terrain_list[plane].append([int(line[1]), int(line[2])])
+                    # setlands go here
+                    elif line[0] == '#population':
+                        self.population_list[plane].append([current_province, int(line[1])])
 
-                        # setlands go here
-                        elif line[0] == '#population':
-                            self.population_list[plane].append([current_province, int(line[1])])
+                    elif line[0] == '#maptextcol':
+                        self.map_text_colour[plane] = [float(line[1]), float(line[2]), float(line[3]), float(line[4])]
+                    elif line[0] == '#mapdomcol':
+                        self.map_dom_colour[plane] = [int(line[1]), int(line[2]), int(line[3]), int(line[4])]
+                    elif line[0] == '#saildist':
+                        self.max_sail_distance[plane] = int(line[1])
+                    elif line[0] == '#features':
+                        self.magic_sites[plane] = int(line[1])
+                    elif line[0] == '#nohomelandnames':
+                        self.capital_names[plane] = True
+                    # if line[0] == '#nonamefilter':
+                    #     self.no_names = True
+                    elif line[0] == '#allowedplayer':
+                        self.allowed_nations_list.append(int(line[1]))
+                    elif line[0] == '#computerplayer':
+                        self.computer_player_list.append([int(line[1]), int(line[2])])
+                    elif line[0] == '#allies':
+                        self.ai_allies_list.append([int(line[1]), int(line[2])])
+                    elif line[0] == '#victorycondition':
+                        self.victory_type = [int(line[1]), int(line[2])]
+                    elif line[0] == '#cannotwin':
+                        self.cannot_win_list.append(int(line[1]))
+                    elif line[0] == '#victorypoints ':
+                        self.victory_point_provinces[plane].append([int(line[1]), int(line[2])])
 
-                        elif line[0] == '#maptextcol':
-                            self.map_text_colour[plane] = [float(line[1]), float(line[2]), float(line[3]), float(line[4])]
-                        elif line[0] == '#mapdomcol':
-                            self.map_dom_colour[plane] = [int(line[1]), int(line[2]), int(line[3]), int(line[4])]
-                        elif line[0] == '#saildist':
-                            self.max_sail_distance[plane] = int(line[1])
-                        elif line[0] == '#features':
-                            self.magic_sites[plane] = int(line[1])
-                        elif line[0] == '#nohomelandnames':
-                            self.capital_names[plane] = True
-                        # if line[0] == '#nonamefilter':
-                        #     self.no_names = True
-                        elif line[0] == '#allowedplayer':
-                            self.allowed_nations_list.append(int(line[1]))
-                        elif line[0] == '#computerplayer':
-                            self.computer_player_list.append([int(line[1]), int(line[2])])
-                        elif line[0] == '#allies':
-                            self.ai_allies_list.append([int(line[1]), int(line[2])])
-                        elif line[0] == '#victorycondition':
-                            self.victory_type = [int(line[1]), int(line[2])]
-                        elif line[0] == '#cannotwin':
-                            self.cannot_win_list.append(int(line[1]))
-                        elif line[0] == '#victorypoints ':
-                            self.victory_point_provinces[plane].append([int(line[1]), int(line[2])])
-
-                        elif line[0] == '#start':
-                            self.start_locations[plane].append(int(line[1]))
-                        elif line[0] == '#nostart':
-                            self.no_start_locations[plane].append(int(line[1]))
-                        elif line[0] == '#specstart':
-                            self.special_start_locations[plane].append([int(line[1]), int(line[2])])
-                        elif line[0] == '#teamstart':
-                            self.special_start_locations[plane].append([int(line[1]), int(line[2])])
+                    elif line[0] == '#start':
+                        self.start_locations[plane].append(int(line[1]))
+                    elif line[0] == '#nostart':
+                        self.no_start_locations[plane].append(int(line[1]))
+                    elif line[0] == '#specstart':
+                        self.special_start_locations[plane].append([int(line[1]), int(line[2])])
+                    elif line[0] == '#teamstart':
+                        self.special_start_locations[plane].append([int(line[1]), int(line[2])])
 
         elif filepath.endswith('.d6m'):  # THIS IS SLOW AS HELL RE-DO IN NUMPY
             with open(filepath, 'rb') as f:  # Read in the (little-endian) binary data
@@ -309,14 +309,14 @@ class DominionsMap:
 
         self.layout = DominionsLayout(self)
         for plane in self.planes:
+            self.layout.province_graphs[plane] = DreamAtlasGraph(size=len(self.terrain_list[plane]), map_size=self.map_size[plane], wraparound=self.wraparound)
             self.province_list[plane] = list()
 
             height_dict = dict()
             for i, terrain_int in self.terrain_list[plane]:
-                new_province = Province(index=i, terrain_int=terrain_int, parent_region=1)
+                new_province = Province(index=i, terrain_int=terrain_int, parent_region=None)
                 self.province_list[plane].append(new_province)
-                self.layout.graph[plane][i] = list()
-                self.layout.darts[plane][i] = list()
+
                 height_dict[i] = 0
                 if has_terrain(terrain_int, 4) or has_terrain(terrain_int, 68719476736):
                     height_dict[i] = -100
@@ -325,9 +325,8 @@ class DominionsMap:
                         self.province_list[plane][-1].population = population
 
             for (i, j) in self.neighbour_list[plane]:
-                self.layout.neighbours[plane].append([i, j])
-                self.layout.graph[plane][i].append(j)
-                self.layout.darts[plane][i].append([0, 0])
+                self.layout.neighbours[plane].append([i-1, j-1])
+                self.layout.province_graphs[plane].connect_nodes(i-1, j-1)
 
             for (i, j, c) in self.special_neighbour_list[plane]:
                 self.layout.special_neighbours[plane].append([i, j, c])
@@ -337,20 +336,13 @@ class DominionsMap:
 
             if plane_image_types[plane] == '.d6m':
                 for i, (x, y, spec) in enumerate(self.province_capital_locations[plane]):
-                    i += 1
-                    self.layout.coordinates[plane][i] = [x, y]
+                    self.layout.province_graphs[plane].coordinates[i] = [x, y]
                     for province in self.province_list[plane]:
-                        if province.index == i:
+                        if province.index == i+1:
                             province.coordinates = [x, y]
                             province.height = self.height_map[plane][x, y]
 
             elif plane_image_types[plane] == '.tga':
-
-                # for province in self.province_list[plane]:
-                #     height_dict[province.index] = 0
-                #     if has_terrain(province.terrain_int, 4):
-                #         height_dict[province.index] = -100
-                #     province.height = height_dict[province.index]
 
                 all_capital_locations = list()
                 pixels = self.image_pil[plane].load()
@@ -362,13 +354,22 @@ class DominionsMap:
 
                 for x, y in all_capital_locations:
                     i = self.pixel_map[plane][x, y]
-                    self.layout.coordinates[plane][i] = [x, y]
+                    self.layout.province_graphs[plane].coordinates[i-1] = [x, y]
                     for province in self.province_list[plane]:
                         if province.index == i:
                             province.coordinates = [x, y]
 
                 self.height_map[plane] = np.vectorize(lambda i: height_dict[i])(self.pixel_map[plane])
-                self.min_dist[plane] = 100
+                self.min_dist[plane] = self.layout.province_graphs[plane].get_min_dist()
+
+            for i, j in self.layout.province_graphs[plane].get_all_connections():
+                min_dist = np.inf
+                for n in self.wraparound:
+                    dist = self.layout.province_graphs[plane].get_length(i, j)
+                    if dist < min_dist:
+                        best_dart = n
+                        min_dist = dist
+                self.layout.province_graphs[plane].darts[i-1] = best_dart
 
     def load_folder(self, folderpath: str):
         plane_image_types = [None for _ in range(10)]
@@ -523,21 +524,20 @@ class DominionsMap:
                 art_style: int = 0):
 
         if location is None:
-            location = r"C:\Users\amyau\PycharmProjects\mapTlaloc\test_maps"
+            location = f"{ROOT_DIR}/maps//"
         if name is None:
-            name = 'DreamAtlas_%i' % self.index
+            name = self.map_title
 
-        map_folder = os.path.join(location, name)
-        os.mkdir(map_folder)
+        os.mkdir(location)
 
         for plane in self.planes:
             plane_str = '_plane%i' % plane
             if plane == 1:
                 plane_str = ''
             if art_style == 0:  # d6m art
-                self.image_file[plane] = '%s%s.d6m' % (name, plane_str)  # Make surface
-                self.make_map_file(plane=plane, filepath=os.path.join(map_folder, '%s%s.map' % (name, plane_str)))
-                self.make_d6m(plane=plane, filepath=os.path.join(map_folder, '%s%s.d6m' % (name, plane_str)))
+                self.image_file[plane] = f'{name}{plane_str}.d6m'  # Make surface
+                self.make_map_file(plane=plane, filepath=location+f'/{name}{plane_str}.map')
+                self.make_d6m(plane=plane, filepath=location+f'/{name}{plane_str}.d6m')
             else:
                 return Exception("No valid artstyle")
 

@@ -15,7 +15,7 @@ def find_shape_size(province, settings):  # Function for calculating the size of
     terrain_int = province.terrain_int
     terrain_list = terrain_int2list(terrain_int)
     size = 1
-    shape = 1.5
+    shape = 2
 
     # size
     if settings.pop_balancing != 0:
@@ -75,6 +75,13 @@ def nations_2_periphery(nations):
     return PERIPHERY_INFO[PERIPHERY_DATA[7*l1+t1][7*l2+t2]-1]
 
 
+COLOURS_PROVINCES = mpl.colormaps['tab20'].resampled(1000)
+COLOURS_REGIONS = mpl.colormaps['Pastel2'].resampled(300)
+COLOURS_TERRAIN = mpl.colormaps['terrain']
+COLOURS_POPULATION = mpl.colormaps['Greens']
+COLOURS_RESOURCES = mpl.colormaps['Oranges']
+
+
 def provinces_2_colours(province_list):  # Creates the pre-defined colours for a whole province list
 
     colours = list()
@@ -84,21 +91,16 @@ def provinces_2_colours(province_list):  # Creates the pre-defined colours for a
     return colours
 
 
-COLOURS_PROVINCES = mpl.colormaps['tab20'].resampled(1000)
-COLOURS_REGIONS = mpl.colormaps['Pastel2'].resampled(100)
-COLOURS_TERRAIN = mpl.colormaps['terrain']
-COLOURS_POPULATION = mpl.colormaps['Greens']
-COLOURS_RESOURCES = mpl.colormaps['Oranges']
-
-
 def single_province_2_colours(province):  # ['Art', 'Provinces', 'Regions', 'Terrain', 'Population', 'Resources']
 
     colour = ['pink'] * 6
 
     colour[1] = mpl.colors.rgb2hex(COLOURS_PROVINCES(province.index))
-    colour[2] = mpl.colors.rgb2hex(COLOURS_REGIONS(province.parent_region))
-    # colour[3] = COLOURS_TERRAIN(province.terrain_int)
-    colour[3] = mpl.colors.rgb2hex(COLOURS_TERRAIN(province.index))
+    if province.parent_region is None:
+        colour[2] = mpl.colors.rgb2hex(COLOURS_REGIONS(1))
+    else:
+        colour[2] = mpl.colors.rgb2hex(COLOURS_REGIONS(province.parent_region.index))
+    colour[3] = mpl.colors.rgb2hex(COLOURS_TERRAIN(province.terrain_int))
     try:
         colour[4] = mpl.colors.rgb2hex(COLOURS_POPULATION(np.sqrt(province.population/50000)))
     except:

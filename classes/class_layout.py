@@ -1,56 +1,4 @@
-import numpy as np
-
 from . import *
-
-
-def less_first(a, b):
-    return [a, b] if a < b else [b, a]
-
-
-def make_delaunay_graph(province_list: list[Province],
-                        map_size: np.array,
-                        neighbours: list = NEIGHBOURS_FULL):
-
-    graph, coordinates, darts = dict(), dict(), dict()
-    for province in province_list:  # Set up the dicts and assign coordinates
-        index = province.index
-        graph[index], coordinates[index], darts[index] = list(), np.asarray(province.coordinates, dtype=np.float32), list()
-
-    points, key_list, counter = list(), dict(), 0
-    for province in province_list:  # Set up the virtual points on the toroidal plane
-        for n in neighbours:
-            x, y = np.asarray(province.coordinates + n * map_size)
-            points.append([x, y])
-            key_list[counter] = province.index
-            counter += 1
-
-    tri = sc.spatial.Delaunay(np.array(points), qhull_options='QJ')
-
-    list_of_edges = list()
-    for triangle in tri.simplices:
-        for e1, e2 in [[0, 1], [1, 2], [2, 0]]:  # for all edges of triangle
-            list_of_edges.append(less_first(triangle[e1], triangle[e2]))  # always lesser index first
-
-    for p1, p2 in np.unique(list_of_edges, axis=0):  # remove duplicates
-        index1, index2 = key_list[p1], key_list[p2]
-        i_c = tri.points[p1]
-        if (0 <= i_c[0] < map_size[0]) and (0 <= i_c[1] < map_size[1]):  # only do this for nodes in the map
-            graph[index1].append(index2)
-            graph[index2].append(index1)
-
-            j_c = tri.points[p2]
-
-            dart = [0, 0]
-            for axis in range(2):
-                if j_c[axis] < 0:
-                    dart[axis] = -1
-                elif j_c[axis] >= map_size[axis]:
-                    dart[axis] = 1
-
-            darts[index1].append(dart)
-            darts[index2].append([-dart[0], -dart[1]])
-
-    return graph, coordinates, darts
 
 
 class DominionsLayout:
@@ -60,6 +8,7 @@ class DominionsLayout:
         self.map = map_class
         self.seed = map_class.seed
         self.map_size = map_class.map_size
+        self.wraparound = self.map.wraparound
 
         # Region level layout - supersedes planes
         self.region_planes = None
@@ -67,9 +16,7 @@ class DominionsLayout:
         self.region_graph = None
 
         # Province level layout - list per plane
-        self.graph = [dict() for _ in range(10)]
-        self.coordinates = [dict() for _ in range(10)]
-        self.darts = [dict() for _ in range(10)]
+        self.province_graphs = [None for _ in range(10)]
         self.edge_types = [list() for _ in range(10)]
         self.neighbours = [list() for _ in range(10)]
         self.special_neighbours = [list() for _ in range(10)]
@@ -104,126 +51,123 @@ class DominionsLayout:
         periphery_region_num = int(0.5 * settings.player_neighbours * homeland_region_num)
         num_regions = homeland_region_num + periphery_region_num + settings.throne_region_num + settings.water_region_num + settings.cave_region_num + settings.vast_region_num
 
-        region_graph = DreamAtlasGraph(size=num_regions, map_size=map_size)
+        self.region_graph = DreamAtlasGraph(size=num_regions+20, map_size=map_size, wraparound=self.wraparound)
         initial_graph = copy(rd.choice(DATASET_GRAPHS[len(player_team_plane)][settings.player_neighbours]))  # Select an initial layout
 
         nation_dict = dict()
-        planes_dict = dict()
-        types_dict = dict()
+        self.region_planes = dict()
+        self.region_types = dict()
         r = 0
 
         # Add Homeland regions
         for i in range(homeland_region_num):
             for j in initial_graph[i+1]:
-                region_graph.connect_nodes(i, j-1)
+                self.region_graph.connect_nodes(i, j-1)
+            self.region_graph.planes[i] = player_team_plane[i][2]
+            self.region_graph.plot_colour[i] = 'b*'
 
             nation_dict[r] = player_team_plane[i][0]
-            planes_dict[r] = player_team_plane[i][2]
-            types_dict[r] = 0
+            self.region_planes[r] = player_team_plane[i][2]
+            self.region_types[r] = 0
             r += 1
 
         weights = dict()
         for i in range(len(player_team_plane)):
             weights[i] = 1
 
-        region_graph.embed_graph(initial_graph, seed)
-        region_graph.plot()
-        region_graph.spring_adjustment()
-        region_graph.plot()
+        self.region_graph.embed_graph(initial_graph, seed)
+        self.region_graph.spring_adjustment()
 
         # Add Peripheral regions
         done_edges = set()
-        for i, j in region_graph.get_all_connections():
+        for i, j in self.region_graph.get_all_connections():
             if (j, i) not in done_edges:
                 done_edges.add((i, j))
-                region_graph.insert_node(i, j, r)
+                self.region_graph.insert_connection(i, j, r)
 
                 nation_dict[r] = [nation_dict[i], nation_dict[j]]
-                planes_dict[r] = 1
-                types_dict[r] = 1
+                self.region_planes[r] = 1
+                self.region_types[r] = 1
                 r += 1
 
-        # Add Throne regions
-        faces, centroids = region_graph.get_faces_centroids()
-        region_graph.plot()
-        codebook, distortion = sc.cluster.vq.kmeans(obs=np.array(centroids, dtype=np.float32), k_or_guess=settings.throne_region_num)
+        faces, centroids = self.region_graph.get_faces_centroids()
 
-        for coordinate in codebook:
-            closest_distance = np.inf
-            for i, centroid in enumerate(centroids):
-                distance = np.linalg.norm(np.subtract(centroid, coordinate))
-                if distance < closest_distance:
-                    best_centroid = centroid
-                    closest_distance = distance
-                    face = faces[i]
-            centroids.remove(best_centroid)
+        region_types = [(settings.throne_region_num, 2, 'throne', 'y*'),
+                        (settings.water_region_num, 3, 'water', 'c*'),
+                        (settings.cave_region_num, 4, 'cave', 'g*'),
+                        (settings.vast_region_num, 5, 'vast', 'm*')]
 
-            for j in face:
-                region_graph.connect_nodes(r, j)
-            region_graph.coordinates[r] = best_centroid
-            planes_dict[r] = 1
-            types_dict[r] = 2
+        for region_num, region_type, region_name, plot_colour in region_types:
+            codebook, distortion = sccvq.kmeans(obs=np.array(centroids, dtype=np.float32), k_or_guess=region_num)
+
+            for coordinate in codebook:
+                closest_distance = np.inf
+                for i, centroid in enumerate(centroids):
+                    distance = np.linalg.norm(np.subtract(centroid, coordinate))
+                    if distance < closest_distance:
+                        best_centroid = centroid
+                        closest_distance = distance
+                        face = faces[i]
+                centroids.remove(best_centroid)
+                faces.remove(face)
+
+                self.region_graph.insert_face(face, r, best_centroid)
+                self.region_planes[r] = 1 if region_name != 'cave' else 2
+                self.region_graph.planes[r] = self.region_planes[r]
+                self.region_graph.plot_colour[r] = plot_colour
+
+                self.region_types[r] = region_type
+                r += 1
+
+        # Add Blocker regions - mountain blocker regions go into remaining faces then cave walls between cave regions
+        for i, centroid in enumerate(centroids):
+            face = faces[i]
+
+            self.region_graph.insert_face(face, r, centroid)
+            self.region_planes[r] = 1
+            self.region_graph.planes[r] = self.region_planes[r]
+            self.region_graph.plot_colour[r] = 'k'
+
+            self.region_types[r] = 6
             r += 1
 
-        region_types = [
-            (settings.water_region_num, 3, 'water'),
-            (settings.cave_region_num, 4, 'cave'),
-            (settings.vast_region_num, 5, 'vast')
-        ]
+        while r < num_regions + 20:
 
-        for region_num, region_type, region_name in region_types:
-            region_locations = rd.sample(centroids, region_num)
-            for i in range(region_num):
-                for j in face:
-                    region_graph.connect_nodes(r, j)
-                region_graph.coordinates[r] = region_locations[i]
-                planes_dict[r] = 1 if region_name != 'cave' else 2
-                types_dict[r] = region_type
-                r += 1
+            self.region_graph.coordinates[r] = [rd.randint(0, map_size[0]), rd.randint(0, map_size[0])]
+            self.region_planes[r] = 2
+            self.region_graph.planes[r] = self.region_planes[r]
+            self.region_graph.plot_colour[r] = 'k'
 
-        # Add Blocker regions - blocker regions go between cave regions, then into non-triangular faces and then fill out
+            self.region_types[r] = 8
+            r += 1
+        self.region_graph.make_delaunay_graph(planes=[2])
 
         # Final Adjustment
-        coordinates, darts = spring_electron_adjustment(region_graph.graph, coordinates, darts, weights, map_size, ratios=np.asarray((0.1, 0.2, 30), dtype=np.float32), iterations=0)
-
-        self.region_planes = planes_dict
-        self.region_types = types_dict
-        self.region_graph = region_graph
+        self.region_graph.spring_adjustment()
 
     def generate_province_layout(self,
+                                 province_list,
                                  plane: int,
                                  seed: int = None):
         dibber(self, seed)  # Setting random seed
 
-        province_list = self.map.province_list[plane]
-        map_size = self.map.map_size[plane]
-        base_length = 0.15 * np.sqrt(map_size[0] * map_size[1] / len(province_list))
-
-        weights = dict()
+        self.province_graphs[plane] = DreamAtlasGraph(len(province_list), map_size=self.map_size[plane], wraparound=self.wraparound)
         for i, province in enumerate(province_list):
-            weights[province.index] = province.size
+            self.province_graphs[plane].coordinates[i] = province.coordinates
+            # self.province_graphs[plane].weights[i] = province.size
 
-        graph, coordinates, darts = make_delaunay_graph(province_list, map_size)
-        coordinates, darts = spring_electron_adjustment(graph, coordinates, darts, weights, map_size, ratios=np.asarray((0.25, 0.9, base_length), dtype=np.float32), iterations=1000)
-
-        self.graph[plane] = graph
-        self.coordinates[plane] = coordinates
-        self.darts[plane] = darts
+        self.province_graphs[plane].make_delaunay_graph()
+        self.province_graphs[plane].spring_adjustment()
 
     def generate_neighbours(self, plane: int):
 
-        done_provinces = set()
         self.neighbours[plane] = list()
-        self.min_dist[plane] = np.inf
-
-        for i in self.graph[plane]:  # Assigning all graph edges as neighbours
-            done_provinces.add(i)
-            for ii, j in enumerate(self.graph[plane][i]):
-                if j not in done_provinces:
-                    self.neighbours[plane].append([i, j])
-                    dist = np.linalg.norm(self.coordinates[plane][j] + np.multiply(self.darts[plane][i][ii], self.map.map_size[plane]) - self.coordinates[plane][i])
-                    if dist < self.min_dist[plane]:
-                        self.min_dist[plane] = dist
+        done_edges = set()
+        for i, j in self.province_graphs[plane].get_all_connections():
+            if (j, i) not in done_edges:
+                done_edges.add((i, j))
+                self.neighbours[plane].append([i+1, j+1])
+        self.min_dist[plane] = self.province_graphs[plane].get_min_dist()
 
     def generate_special_neighbours(self,
                                     plane: int,
@@ -237,7 +181,7 @@ class DominionsLayout:
         for province in self.map.province_list[plane]:
             index_2_prov[province.index] = province
 
-        for i, j in self.neighbours[plane]:  # Randomly assigns special connections (will be improved in v1.1)
+        for i, j in self.neighbours[plane]:  # Randomly assigns special connections
             i_j_provs = [index_2_prov[i], index_2_prov[j]]
             choice = int(rd.choices(SPECIAL_NEIGHBOUR, NEIGHBOUR_SPECIAL_WEIGHTS)[0][0])
             if choice != 0:
@@ -253,29 +197,36 @@ class DominionsLayout:
                     elif has_terrain(ti, 68719476736):  # if cave wall
                         self.special_neighbours[plane].append([i, j, 4])
                         fail = True
+                    elif type(i_j_provs[index].parent_region) is BlockerRegion:  # if blocker
+                        self.special_neighbours[plane].append([i, j, 4])
+                        fail = True
                     elif (choice == 33 or choice == 36) and not has_terrain(ti, 8388608):
                         i_j_provs[index].terrain_int += 8388608
                 if not fail:
                     self.special_neighbours[plane].append([i, j, choice])
 
-    def generate_gates(self, all_regions, seed: int = None):
+    def generate_gates(self, region_list, seed: int = None):
         dibber(self, seed)  # Setting random seed
         self.gates = [[] for _ in range(10)]
         gate = 1
-        for ii, i in enumerate(self.region_graph):
-            i_region = all_regions[ii]
-            if self.region_planes[i] == 2 and self.region_types[i] != 6:
-                gate_connections = list()
-                for j in self.region_graph[i]:
-                    if self.region_planes[j] == 1:
-                        gate_connections.append(j)
+        for region_type in [0, 4]:
+            for i, i_region in enumerate(region_list[region_type]):
 
-                if self.region_types[i] == 0:
-                    gate_connections = gate_connections[0:3]
+                possible_j_regions = list()
+                for j, j_region in enumerate(region_list[1]):
+                    if self.region_graph.graph[i_region.index, j_region.index]:
+                        possible_j_regions.append(j_region)
+                rd.shuffle(possible_j_regions)
 
-                for iii, j in enumerate(gate_connections):
-                    i_province = i_region.provinces[iii]
-                    j_province = rd.choice(all_regions[j].provinces)
+                gates_num = 2
+                start = 0
+                if region_type == 0:
+                    gates_num = 3
+                    start = 1
+
+                for j_region in possible_j_regions[0:gates_num]:
+                    i_province = rd.choice(i_region.provinces[start:])
+                    j_province = rd.choice(j_region.provinces)
 
                     self.gates[1].append([j_province.index, gate])
                     self.gates[2].append([i_province.index, gate])

@@ -1,10 +1,6 @@
-import matplotlib.pyplot as plt
-from PIL.Image import Transpose
-from networkx.algorithms.bipartite import color
-
-from . import *
-from .ui_data import *
 from .widgets import *
+from .loading import *
+from .ui_data import *
 
 # UI VARIABLES
 ########################################################################################################################
@@ -52,7 +48,6 @@ class MainInterface(ttk.Frame):
         self.editor_focus = None
 
         self.build_gui()
-        self.update_gui()
 
     def build_gui(self):  # This builds the high level widgets for the UI that are never removed
 
@@ -135,16 +130,16 @@ class MainInterface(ttk.Frame):
         # BINDINGS
         # self.explorer_panel.tag_bind("explorer_tag", "<<TreeviewSelect>>", item_selected)
 
-        def do_zoom(event):
-            x = self.viewing_canvas.canvasx(event.x)
-            y = self.viewing_canvas.canvasy(event.y)
-            factor = 1.001 ** event.delta
-            self.viewing_canvas.scale(ALL, x, y, factor, factor)
-            # for plane in self.map.planes:
-            #     for i, iid, bitmap in self.viewing_bitmaps[plane]:
-            #         iid.zoom(factor)
-            #     for i, iid, photoimage, trans_photoimage in self.viewing_photoimages[plane]:
-            #         iid.zoom(factor)
+        # def do_zoom(event):
+        #     x = self.viewing_canvas.canvasx(event.x)
+        #     y = self.viewing_canvas.canvasy(event.y)
+        #     factor = 1.001 ** event.delta
+        #     self.viewing_canvas.scale(ALL, x, y, factor, factor)
+        #     # for plane in self.map.planes:
+        #     #     for i, iid, bitmap in self.viewing_bitmaps[plane]:
+        #     #         iid.zoom(factor)
+        #     #     for i, iid, photoimage, trans_photoimage in self.viewing_photoimages[plane]:
+        #     #         iid.zoom(factor)
 
         def right_click(event):
             focus = None
@@ -185,12 +180,13 @@ class MainInterface(ttk.Frame):
         # viewing_panel.bind("<s>", v_drag)
         # viewing_panel.bind("<d>", v_drag)
 
-        self.viewing_canvas.bind("<MouseWheel>", do_zoom)  # WINDOWS ONLY
+        # self.viewing_canvas.bind("<MouseWheel>", do_zoom)  # WINDOWS ONLY
         self.viewing_canvas.bind('<ButtonPress-1>', lambda event: self.viewing_canvas.scan_mark(event.x, event.y))
         self.viewing_canvas.tag_bind('clickable', '<ButtonPress-3>', right_click)
         self.viewing_canvas.bind("<B1-Motion>", lambda event: self.viewing_canvas.scan_dragto(event.x, event.y, gain=1))
 
     def update_gui(self):
+        self.empty = False
         self.update_explorer_panel()
         self.update_viewing_panel()
         self.update_editor_panel()
@@ -211,10 +207,9 @@ class MainInterface(ttk.Frame):
                     self.explorer_panel.insert(plane_tag, ttk.END, text=f'Province {province.index}', tags="explorer_tag")
 
             parent = self.explorer_panel.insert("", ttk.END, text="Regions")
-            regions_super_list = [["Homelands", self.map.homeland_list], ["Peripheries", self.map.periphery_list], ["Thrones", self.map.throne_list], ["Water", self.map.water_list], ["Caves", self.map.cave_list], ["Vasts", self.map.vast_list], ["Blockers", self.map.blocker_list]]
-            for i, (text, region_list) in enumerate(regions_super_list):
+            for i, text in enumerate(EXPLORER_REGIONS):
                 parent2 = self.explorer_panel.insert(parent, ttk.END, text=text)
-                for j, region in enumerate(region_list):
+                for j, region in enumerate(self.map.region_list[i]):
                     region_tag = self.explorer_panel.insert(parent2, ttk.END, text=f'{region.name}')
                     for province in region.provinces:
                         self.explorer_panel.insert(region_tag, ttk.END, text=f'Province {province.index}', tags="explorer_tag")
@@ -247,14 +242,15 @@ class MainInterface(ttk.Frame):
                     self.viewing_bitmaps[plane].append([i, iid, bitmap])
 
                 # Making art objects
-                if self.map.image_file[plane].endswith('.tga'):  # Art layer
-                    image = Image.open(self.map.image_file[plane])
-                    photoimage = ImageTk.PhotoImage(image)
-                    image2 = image.copy()
-                    image2.putalpha(170)
-                    trans_photoimage = ImageTk.PhotoImage(image2)
-                    iid = self.viewing_canvas.create_image(0, 0, anchor=ttk.NW, image=photoimage, disabledimage=trans_photoimage, state=ttk.HIDDEN, tags=(f'plane{plane}', 'photoimage'))
-                    self.viewing_photoimages[plane] = [self.map.image_file[plane], iid, photoimage, trans_photoimage]
+                if self.map.image_file[plane] is not None:
+                    if self.map.image_file[plane].endswith('.tga'):  # Art layer
+                        image = Image.open(self.map.image_file[plane])
+                        photoimage = ImageTk.PhotoImage(image)
+                        image2 = image.copy()
+                        image2.putalpha(170)
+                        trans_photoimage = ImageTk.PhotoImage(image2)
+                        iid = self.viewing_canvas.create_image(0, 0, anchor=ttk.NW, image=photoimage, disabledimage=trans_photoimage, state=ttk.HIDDEN, tags=(f'plane{plane}', 'photoimage'))
+                        self.viewing_photoimages[plane] = [self.map.image_file[plane], iid, photoimage, trans_photoimage]
 
                 # Making borders
                 image = Image.fromarray(np.flip(pixel_matrix_2_borders_array(self.map.pixel_map[plane], thickness=2).transpose(), axis=0), mode='L')
@@ -263,33 +259,36 @@ class MainInterface(ttk.Frame):
                 self.viewing_borders[plane] = [iid, border]
 
                 # Making connection objects
-                virtual_graph, virtual_coordinates = ui_find_virtual_graph(self.map.layout.graph[plane], self.map.layout.coordinates[plane], self.map.map_size[plane], NEIGHBOURS_FULL)
-                done_edges = set()
-
-                for i in virtual_graph:
-                    x_1, y_1 = virtual_coordinates[i]
-                    for j in virtual_graph[i]:
-                        if j not in done_edges:
-                            x_2, y_2 = virtual_coordinates[j]
-                            iid = self.viewing_canvas.create_line(x_1, self.map.map_size[plane][1]-y_1, x_2, self.map.map_size[plane][1]-y_2, state=ttk.HIDDEN, dash=(100, 15), activefill='white', fill='red', tags=(f'plane{plane}', f'{(i, j)}', 'connections', 'clickable'), width=4)
-                            self.viewing_connections[plane].append([(i, j), iid])
+                virtual_graph, virtual_coordinates = self.map.layout.province_graphs[plane].get_virtual_graph()
+                done_nodes = set()
+                for i, (x1, y1) in enumerate(virtual_coordinates):
+                    for j in np.argwhere(virtual_graph[i, :] == 1):
+                        j = int(j)
+                        if j not in done_nodes:
+                            x2, y2 = virtual_coordinates[j]
+                            iid = self.viewing_canvas.create_line(x1, self.map.map_size[plane][1]-y1, x2, self.map.map_size[plane][1]-y2, state=ttk.HIDDEN, dash=(100, 15), activefill='white', fill='red', tags=(f'plane{plane}', f'{(i+1, j+1)}', 'connections', 'clickable'), width=4)
+                            self.viewing_connections[plane].append([(i+1, j+1), iid])
                     colour = 'red'
-                    radius = 15
-                    width = 4
-                    if i > len(self.map.layout.graph[plane]):
+                    radius = 12
+                    width = 3
+                    if i >= self.map.layout.province_graphs[plane].size:
                         colour = 'blue'
                         radius = 5
                         width = 2
-                    iid = self.viewing_canvas.create_oval(x_1-radius, self.map.map_size[plane][1]-(y_1-radius), x_1+radius, self.map.map_size[plane][1]-(y_1+radius), state=ttk.HIDDEN, activefill='white', fill=colour, tags=(f'plane{plane}', f'{i}', 'nodes', 'clickable'), width=width)
-                    self.viewing_nodes[plane].append([i, iid])
-                    done_edges.add(i)
+                    iid = self.viewing_canvas.create_oval(x1-radius, self.map.map_size[plane][1]-(y1-radius), x1+radius, self.map.map_size[plane][1]-(y1+radius), state=ttk.HIDDEN, activefill='white', fill=colour, tags=(f'plane{plane}', f'{i+1}', 'nodes', 'clickable'), width=width)
+                    self.viewing_nodes[plane].append([i+1, iid])
+                    done_nodes.add(i)
 
     def update_editor_panel(self):
         if not self.empty:  # If there is data
             if self.focus is not None:  # If there is a focus
                 if self.editor_focus is not None:
                     self.editor_focus.destroy()
-                self.editor_focus = InputWidget(master=self.editor_frame, ui_config=UI_CONFIG_PROVINCE, cols=1, target_class=self.focus)
+                if type(self.focus) is Province:
+                    self.editor_focus = InputWidget(master=self.editor_frame, ui_config=UI_CONFIG_PROVINCE, cols=1, target_class=self.focus)
+                if type(self.focus) is Connection:
+                    self.editor_focus = InputWidget(master=self.editor_frame, ui_config=UI_CONFIG_CONNECTION, cols=1, target_class=self.focus)
+                self.editor_focus.class_2_input()
                 self.editor_focus.grid(row=0, column=0, sticky="NEWS")
 
     def update_plane_lense_panels(self):
@@ -300,6 +299,9 @@ class MainInterface(ttk.Frame):
             for iid in self.lense_options:
                 iid.config(state=ttk.NORMAL)
 
+            if self.map.image_file[1] is None:
+                self.lense_options[0].config(state=ttk.DISABLED)
+
             for variable, tag, active, iid in self.display_options:
                 if active:
                     iid.config(state=ttk.NORMAL)
@@ -308,6 +310,11 @@ class MainInterface(ttk.Frame):
         if not self.empty:  # If there is data
 
             new_plane = self.selected_plane.get()
+
+            if self.viewing_photoimages[new_plane] is None:
+                if self.selected_lense.get() == 0:
+                    self.selected_lense.set(1)
+
             new_lense = self.selected_lense.get()
 
             self.viewing_canvas.config(confine=True, scrollregion=(0, 0, self.map.map_size[new_plane][0], self.map.map_size[new_plane][1]))
@@ -341,25 +348,26 @@ class MainInterface(ttk.Frame):
             self.current_plane = new_plane
             self.current_lense = new_lense
 
+    def generate_dreamatlas(self):
+
+        InputToplevel(master=self, title='Generate DreamAtlas Map', ui_config=UI_CONFIG_SETTINGS, cols=2, target_class=DreamAtlasSettings(0), map=self.map)
+
     def load_map(self, folder):
 
         self.map.load_folder(folder)
-        self.empty = False
         self.update_gui()
 
     def load_file(self, file):
 
         self.map.load_file(file)
-        self.empty = False
         self.update_gui()
 
     def save_map(self, folder):
-
         self.map.publish(folder)
 
 
 def run_interface():
-    app = ttk.Window(title="DreamAtlas Map Editor", themename='dreamfantasy', iconphoto=ART_ICON)
+    app = ttk.Window(title="DreamAtlas", themename='dreamfantasy', iconphoto=ART_ICON)
     app.place_window_center()
 
     def _config():
@@ -379,8 +387,8 @@ def run_interface():
     app.config(menu=menu)
     file_menu = ttk.Menu(menu, tearoff=0)  # The FILE dropdown menu
     file_menu.add_command(label="New", command=lambda: [ui.destroy(), ui.__init__(app)])
-    file_menu.add_command(label="Save", command=lambda: ui.save_map(tkf.asksaveasfilename(parent=app, initialdir=ROOT_DIR.parent)))
-    file_menu.add_command(label="Load map", command=lambda: ui.load_map(tkf.askdirectory(parent=app, initialdir=ROOT_DIR.parent)))
+    file_menu.add_command(label="Save", command=lambda: ui.save_map(tkf.asksaveasfilename(parent=app, initialdir=ROOT_DIR, initialfile=ui.map.map_title)))
+    file_menu.add_command(label="Load map", command=lambda: ui.load_map(tkf.askdirectory(parent=app, initialdir=ROOT_DIR)))
     # file_menu.add_command(label="Load file", command=lambda: ui.load_file(tkf.askopenfilename(parent=app, initialdir=ROOT_DIR.parent)))
     # file_menu.add_separator()
     # file_menu.add_command(label="Settings", command=_config)
@@ -391,7 +399,7 @@ def run_interface():
     # tools_menu.add_command(label="Pixel mapping", command=_config)
 
     generate_menu = ttk.Menu(menu, tearoff=0)  # The GENERATE dropdown menu
-    generate_menu.add_command(label="DreamAtlas", command=lambda: InputToplevel(master=ui, title='Generate DreamAtlas Map', ui_config=UI_CONFIG_SETTINGS, cols=2, target_class=ui.settings, map=ui.map))
+    generate_menu.add_command(label="DreamAtlas", command=lambda: ui.generate_dreamatlas())
 
     menu.add_cascade(label="File", menu=file_menu)
     menu.add_cascade(label="Tools", menu=tools_menu)

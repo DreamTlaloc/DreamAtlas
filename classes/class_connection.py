@@ -1,5 +1,3 @@
-from . import *
-
 
 class Connection:
 

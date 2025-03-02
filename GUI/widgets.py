@@ -1,5 +1,3 @@
-import ttkbootstrap
-
 from DreamAtlas import *
 from .loading import GeneratorLoadingWidget
 from .ui_data import *
@@ -8,8 +6,7 @@ from .ui_data import *
 class InputToplevel(ttk.Toplevel):
 
     def __init__(self, master, title, ui_config, cols, target_type=None, target_class=None, target_location=None, map=None, parent_widget=None):
-        self.master = master
-        super().__init__(title=title, iconphoto=ART_ICON, transient=master)
+        super().__init__(title=title, iconphoto=ART_ICON, transient=master, master=master)
         self.columnconfigure(0, weight=1)
         widget = InputWidget(master=self, ui_config=ui_config, cols=cols, target_type=target_type, target_class=target_class, target_location=target_location, map=None, parent_widget=parent_widget)
         widget.grid(row=0, column=0, sticky='NEWS')
@@ -21,7 +18,6 @@ class InputToplevel(ttk.Toplevel):
 class InputWidget(ttk.Frame):
 
     def __init__(self, master, ui_config, cols, target_type=None, target_class=None, target_location=None, map=None, parent_widget=None):
-        self.master = master
         super().__init__(master=master)
         self.ui_config = ui_config
         self.cols = cols
@@ -38,12 +34,12 @@ class InputWidget(ttk.Frame):
         self.inputs = dict()
         self.variables = dict()
         self.BUTTONS = [
-            ['Update', lambda: self.update()],
+            ['Update', lambda: self.update_class()],
             ['Add', lambda: self.add()],
             ['Generate', lambda: self.generate()],
             ['Save', lambda: self.save()],
             ['Load', lambda: self.load()],
-            ['Clear', lambda: self.clear()],
+            ['Reset', lambda: self.clear()],
             ['Close', lambda: self.master.destroy()]
         ]
         self.make_gui()
@@ -63,10 +59,11 @@ class InputWidget(ttk.Frame):
                     self.inputs['vanilla_nations'] = VanillaNationWidget(frames[-1], cols=5)
                 elif widget == 5:
                     self.inputs['custom_nations'] = CustomGenericNationWidget(frames[-1], cols=5)
-                # elif frame == 6:
-                #     do_connection = True
+                elif widget == 6:
+                    self.inputs[attribute] = IllwinterDropdownWidget(frames[-1], attribute)
+                    self.inputs[attribute].grid(row=i, column=0, sticky='NEWS', pady=5, padx=10, rowspan=2)
                 elif widget == 7:
-                    self.inputs['terrain'] = TerrainWidget(frames[-1], cols=4)
+                    self.inputs[attribute] = TerrainWidget(frames[-1], cols=4)
                 else:
                     state = ttk.NORMAL
                     if not active:
@@ -124,8 +121,8 @@ class InputWidget(ttk.Frame):
                 if widget == 3:
                     setattr(self.target_class, attribute, attribute_type(self.variables[attribute].get()))
                 elif widget == 4:
-                    self.target_class.age = self.inputs[attribute].age.get()
-                    self.target_class.vanilla_nations = self.inputs['vanilla_nations'].vanilla_nation_list
+                    self.target_class.age = AGES.index(self.inputs[attribute].age.get())
+                    self.target_class.vanilla_nations = self.inputs['vanilla_nations'].get()
                 elif widget == 5:
                     self.target_class.custom_nations = self.inputs['custom_nations'].custom_nation_list
                     self.target_class.generic_nations = self.inputs['custom_nations'].generic_nation_list
@@ -170,6 +167,9 @@ class InputWidget(ttk.Frame):
 
         return input_list
 
+    def update_class(self):
+        self.input_2_class()
+
     def add(self):
         self.target_location.append(self.input_2_list())
         self.parent_widget.update()
@@ -177,21 +177,22 @@ class InputWidget(ttk.Frame):
 
     def generate(self):
         self.input_2_class()
+        _ = GeneratorLoadingWidget(master=self.master.master, map=self.map, settings=self.target_class)
+        _.generate()
         self.master.destroy()
-        print(self.target_class)
-        GeneratorLoadingWidget(master=self.master.master, map=self.map, settings=self.target_class).generate()
 
     def save(self):
         self.input_2_class()
-        self.target_class.save_file(tkf.asksaveasfilename(parent=self.master, initialdir=ROOT_DIR.parent))
+        self.target_class.save_file(tkf.asksaveasfilename(parent=self.master, initialdir=ROOT_DIR))
 
     def load(self):
-        self.target_class.load_file(tkf.askopenfilename(parent=self.master, initialdir=ROOT_DIR.parent))
+        self.target_class.load_file(tkf.askopenfilename(parent=self.master, initialdir=ROOT_DIR))
         self.class_2_input()
 
     def clear(self):
         self.destroy()
         self.__init__(self.master, self.ui_config, self.cols, target_class=self.target_class)
+        self.class_2_input()
 
 
 class VanillaNationWidget(ttk.Frame):
@@ -214,6 +215,7 @@ class VanillaNationWidget(ttk.Frame):
 
         self.disciples = 0
         self.options = None
+        self.variables = None
         self.miniframes = list()
 
         self.update()
@@ -224,6 +226,7 @@ class VanillaNationWidget(ttk.Frame):
             self.disciples = disciples
 
         self.options = dict()
+        self.variables = dict()
 
         for frame in self.miniframes:
             for widget in frame.winfo_children():
@@ -237,12 +240,14 @@ class VanillaNationWidget(ttk.Frame):
             self.miniframes.append(ttk.Frame(self))
             self.miniframes[-1].grid(row=1 + i // self.cols, column=i % self.cols, sticky='WE', pady=2, padx=2)
 
-            self.options[entry[0]] = ttk.Checkbutton(self.miniframes[-1], text=entry[1], bootstyle="primary-outline-toolbutton", variable=ttk.IntVar())
+            self.variables[entry[0]] = ttk.IntVar()
+            self.options[entry[0]] = ttk.Checkbutton(self.miniframes[-1], text=entry[1], bootstyle="primary-outline-toolbutton", variable=self.variables[entry[0]])
             self.options[entry[0]].grid(row=0, column=0, sticky='WE')
 
             if self.disciples:
                 xj = ttk.Combobox(self.miniframes[-1], values=TEAMS, textvariable=ttk.StringVar(), justify=ttk.CENTER, bootstyle="primary-outline-toolbutton", width=2)
                 xj.grid(row=0, column=1, sticky='WE')
+                self.miniframes[-1].columnconfigure(1, weight=1, minsize=20)
                 xj.set(TEAMS[0])
 
             for nation, team in self.vanilla_nation_list:
@@ -251,7 +256,19 @@ class VanillaNationWidget(ttk.Frame):
                     if self.disciples:
                         xj.set(team)
 
-            self.miniframes[-1].columnconfigure(0, weight=5, minsize=10)
+            self.miniframes[-1].columnconfigure(0, weight=4, minsize=80)
+
+        for i in range(self.cols):
+            self.columnconfigure(i, minsize=120)
+
+    def get(self):
+        nation_list = list()
+        for i, entry in enumerate(AGE_NATIONS[AGES.index(self.age.get())]):
+
+            if self.variables[entry[0]].get():
+                nation_list.append([entry[0], 1])
+        print(self.age, nation_list)
+        return nation_list
 
 
 class CustomGenericNationWidget(ttk.Frame):
@@ -300,7 +317,7 @@ class CustomGenericNationWidget(ttk.Frame):
                 if i == 0:
                     text = nation[1]
                 else:
-                    text = f'{nation[1]} - {nation[2]}'
+                    text = f'Generic Nation {j+1}'
 
                 self.nation_inputs[i] = ttk.Button(self.miniframes[-1], text=text, bootstyle=f'{bootstyle[i]}')
                 self.nation_inputs[i].grid(row=0, column=0, sticky='WE')
@@ -371,3 +388,36 @@ class TerrainWidget(ttk.Frame):
             if self.variables[i].get():
                 terrain_int += TERRAIN_PRIMARY[i][1]
         self.terrain_int.set(terrain_int)
+
+
+class IllwinterDropdownWidget(ttk.Frame):
+
+    def __init__(self, master, data_type):
+        self.master = master
+        super().__init__(master=master)
+        self.grid()
+
+        options = {
+            'victory_type': ['Victory Conditions', VICTORY_CONDITIONS],
+            'poptype': ['Poptype', POPTYPES],
+            'fort': ['Fort', FORT],
+            'connection_int': ['Connection type', SPECIAL_NEIGHBOUR]
+        }
+
+        text, data = options[data_type]
+        entries = [['-']]
+        self.get_dict = {'-': None}
+
+        for i, j in data:
+            entries.append(j)
+            self.get_dict[j] = i
+
+        ttk.Label(self, text=text).grid(row=0, column=0, sticky='NEWS', pady=5, padx=5)
+
+        self.variable = ttk.StringVar()
+        self.input = ttk.Combobox(self, values=entries, textvariable=self.variable, state=ttk.READONLY)
+        self.input.grid(row=0, column=1, sticky='NEWS', pady=5, padx=5)
+        self.input.set(entries[0])
+
+    def get(self):
+        return self.get_dict[self.variable]
