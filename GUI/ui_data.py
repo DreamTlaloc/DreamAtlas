@@ -84,40 +84,39 @@ UI_CONFIG_REGION = [
 
 UI_CONFIG_SETTINGS = {
     'label_frames': [
-        ['Map Info', ['map_title', 'seed', 'description', 'ygg_description', 'ygg_icon']],
+        ['Map Info', ['map_title', 'seed', 'description']],
         ['General Settings', ['art_style', 'wraparound', 'pop_balancing', 'site_frequency', 'cap_connections', 'player_neighbours']],
         ['Region Settings', ['homeland_size', 'periphery_size', 'water_region_type', 'cave_region_type', 'water_region_num', 'cave_region_num', 'throne_region_num', 'vast_region_num']],
         ['Additional Options', ['disciples', 'omniscience']],
         ['Nations & Teams', ['vanilla_nations']],
-        ['Generic/Custom Nations', ['custom_nations']]],
+        ['Generic/Custom Nations', ['custom_nations']],
+        ['Estimates', ['generation_info']]],
     'buttons': [2, 3, 4, 5, 6],
     'attributes': {
         'map_title': [str, 0, 'Map Title', None, 1, 'Enter the title of the map'],
-        'seed': [int, 0, 'Seed', None, 1, 'Enter the seed value for map generation'],
+        'seed': [int, 0, 'Seed', None, 1, 'Enter the random seed for map generation'],
         'description': [str, 0, 'Description', None, 1, 'Enter a description for the map'],
-        'ygg_description': [str, 0, 'Yggdrasil Description', None, 1, 'Enter a description for the Yggdrasil'],
-        'ygg_icon': [str, 0, 'Yggdrasil Icon', None, 1, 'Enter the icon path for the Yggdrasil'],
 
         'art_style': [int, 1, 'Art Style', ['.d6m'], 1, 'Select the art style for the map'],
         'wraparound': [int, 1, 'Wraparound', ['None', 'Horizontal', 'Vertical', 'Full'], 1, 'Select the wraparound type for the map'],
-        'pop_balancing': [int, 1, 'Balance', ['Vanilla', 'DreamAtlas'], 1, 'Select the population balancing method'],
-        'cave_region_type': [int, 1, 'Cave Type', ['None', 'Grottos', 'Tunnels', 'Caverns'], 1, 'Select the type of cave regions'],
-        'water_region_type': [int, 1, 'Water Type', ['None', 'Lakes', 'Seas', 'Oceans'], 1, 'Select the type of water regions'],
+        'pop_balancing': [int, 1, 'Balance', ['Vanilla', 'DreamAtlas'], 1, 'Select the balancing method\nVanilla - No balancing\nDreamAtlas (recommended) - Fair population and terrain balance'],
+        'cave_region_type': [int, 1, 'Cave Type', ['None', 'Grottos', 'Tunnels', 'Caverns'], 1, 'Select the type of cave regions\nNone - No cave regions\nGrottos - 1 province per region\nTunnels - 3 provinces per region\nCaverns - 6 provinces per region'],
+        'water_region_type': [int, 1, 'Water Type', ['None', 'Lakes', 'Seas', 'Oceans'], 1, 'Select the type of water regions\nNone - No water regions\nLakes - 1 province per region\nSeas - 3 provinces per region\nOceans - 5 provinces per region'],
 
-        'site_frequency': [int, 2, 'Site Frequency', [40, 100], 1, 'Select the frequency of sites on the map'],
-        'cap_connections': [int, 2, 'Capital Connections', [4, 8], 1, 'Select the number of connections for capitals'],
-        'player_neighbours': [int, 2, 'Player Neighbours', [3, 7], 1, 'Select the number of neighbours for players'],
-        'homeland_size': [int, 2, 'Homeland Size', [4, 12], 1, 'Select the size of the homeland regions'],
-        'periphery_size': [int, 2, 'Periphery Size', [1, 8], 1, 'Select the size of the periphery regions'],
-        'throne_region_num': [int, 2, 'Thrones', [1, 32], 1, 'Select the number of throne regions'],
+        'site_frequency': [int, 2, 'Site Frequency', [40, 100], 1, 'Select the frequency of magic sites on the map'],
+        'cap_connections': [int, 2, 'Capital Connections', [4, 8], 1, 'Select the number of provinces in each cap circle (must be less than the size of the homeland)'],
+        'player_neighbours': [int, 2, 'Player Neighbours', [3, 6], 1, 'Select the number of neighbours for each player'],
+        'homeland_size': [int, 2, 'Homeland Size', [4, 12], 1, 'Select the size of the homeland regions\nThese are the regions around each players capital'],
+        'periphery_size': [int, 2, 'Periphery Size', [1, 8], 1, 'Select the size of the periphery regions\nThese are the regions connecting different players'],
+        'throne_region_num': [int, 2, 'Thrones', [1, 32], 1, 'Select the number of thrones'],
         'water_region_num': [int, 2, 'Water Regions', [0, 30], 1, 'Select the number of water regions'],
         'cave_region_num': [int, 2, 'Cave Regions', [0, 30], 1, 'Select the number of cave regions'],
-        'vast_region_num': [int, 2, 'Vast Regions', [0, 30], 1, 'Select the number of vast regions'],
+        'vast_region_num': [int, 2, 'Vast Regions', [0, 30], 1, 'Select the number of vast regions\nThese regions are empty and uncontrollable but can be traversed'],
 
         'disciples': [int, 3, 'Disciples', None, 0, 'Toggle disciples mode'],
-        'omniscience': [int, 3, 'Omniscience', None, 1, 'Toggle omniscience mode'],
+        'omniscience': [int, 3, 'Omniscience', None, 1, 'Toggle creating a hidden omniscience start'],
 
-        'vanilla_nations': [list, 4, 'Nations & Teams', None, 1, 'Select the vanilla nations and teams'],
+        'vanilla_nations': [list, 4, 'Nations & Teams', None, 1, 'Select the vanilla nations and teams\nOnly nations from the selected age will be used'],
         'custom_nations': [list, 5, 'Custom/Generic Nations', None, 1, 'Select the custom or generic nations']
     }
 }
@@ -129,9 +128,11 @@ TERRAIN_PRIMARY = [
     [30, 1073741824, 'Warmer'], [31, 2147483648, 'Colder'], [33, 8589934592, 'Vast'],
     [34, 17179869184, 'Infernal waste'], [35, 34359738368, 'Void'], [38, 274877906944, 'Flooded']
 ]
-
+CAVE_REGIONS = ['None', 'Grottos', 'Tunnels', 'Caverns']
+WATER_REGIONS = ['None', 'Lakes', 'Seas', 'Oceans']
 EXPLORER_REGIONS = ["Homelands", "Peripheries", "Thrones", "Water", "Caves", "Vasts", "Blockers"]
 
+TOOLTIP_DELAY = 500
 
 ART_ICON = r'C:\Users\amyau\PycharmProjects\mapTlaloc\DreamAtlas\GUI\gui_art\DreamAtlasLogoSquare.png'
 UI_STATES = (ttk.DISABLED, ttk.NORMAL, ttk.HIDDEN)

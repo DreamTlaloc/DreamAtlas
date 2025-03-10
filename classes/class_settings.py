@@ -7,8 +7,6 @@ class DreamAtlasSettings:
         self.seed: int = 0
         self.description: str = None
         self.map_title: str = None
-        self.ygg_description: str = None
-        self.ygg_icon: str = None
 
         self.homeland_size: int = None
         self.cap_connections: int = None
@@ -64,14 +62,17 @@ class DreamAtlasSettings:
 
         with open(filename, 'w') as f:  # Writes all the settings to a file
             for attribute in self.__dict__:
-                if attribute == 'nations':
+                if attribute == 'vanilla_nations':
                     for i in getattr(self, attribute):
-                        f.write(f'#nation {i[0]} {i[1]}\n')
+                        f.write(f'#vanilla_nation {i[0]} {i[1]}\n')
                 elif attribute == 'custom_nations':
                     for i in getattr(self, attribute):
-                        f.write(f'#customnation {i[0]} {i[1]}\n')
+                        f.write(f'#custom_nation {i[0]} {i[1]} {i[2]} {i[3]} {i[4]} {i[5]} {i[6]} {i[7]}\n')
+                elif attribute == 'generic_nations':
+                    for i in getattr(self, attribute):
+                        f.write(f'#generic_nation {i[0]} {i[1]} {i[2]} {i[3]} {i[4]}\n')
                 else:
-                    f.write(f'#{attribute} %{getattr(self, attribute)}\n')
+                    f.write(f'#{attribute} {getattr(self, attribute)}\n')
 
     def __str__(self):
 

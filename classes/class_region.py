@@ -301,7 +301,7 @@ class VastRegion(Region):
 
         for i in range(self.region_size):  # Apply the terrain and land/sea/cave tags to each province
             province = self.provinces[i]
-            province.terrain_int = self.terrain
+            province.terrain_int = self.terrain + 8589934592
 
     def generate_population(self, seed: int = None):
 
@@ -310,7 +310,7 @@ class VastRegion(Region):
 
         for i, province in enumerate(self.provinces):
             province.has_commands = True
-            province.population = 0
+            province.population = 8000
 
 
 class BlockerRegion(Region):

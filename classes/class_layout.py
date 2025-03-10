@@ -97,17 +97,24 @@ class DominionsLayout:
                         (settings.cave_region_num, 4, 'cave', 'g*'),
                         (settings.vast_region_num, 5, 'vast', 'm*')]
 
+        extras = False
         for region_num, region_type, region_name, plot_colour in region_types:
-            codebook, distortion = sccvq.kmeans(obs=np.array(centroids, dtype=np.float32), k_or_guess=region_num)
+            if region_num == 0:
+                continue
+            if region_num <= len(centroids):
+                codebook, distortion = sccvq.kmeans(obs=np.array(centroids, dtype=np.float32), k_or_guess=region_num)
+            else:
+                codebook = centroids
+                extras = True
 
             for coordinate in codebook:
                 closest_distance = np.inf
-                for i, centroid in enumerate(centroids):
+                for j, centroid in enumerate(centroids):
                     distance = np.linalg.norm(np.subtract(centroid, coordinate))
                     if distance < closest_distance:
                         best_centroid = centroid
                         closest_distance = distance
-                        face = faces[i]
+                        face = faces[j]
                 centroids.remove(best_centroid)
                 faces.remove(face)
 
@@ -118,6 +125,30 @@ class DominionsLayout:
 
                 self.region_types[r] = region_type
                 r += 1
+
+            if extras:
+                extras = False
+                faces, centroids = self.region_graph.get_faces_centroids()
+                codebook, distortion = sccvq.kmeans(obs=np.array(centroids, dtype=np.float32), k_or_guess=region_num-len(codebook))
+
+                for coordinate in codebook:
+                    closest_distance = np.inf
+                    for j, centroid in enumerate(centroids):
+                        distance = np.linalg.norm(np.subtract(centroid, coordinate))
+                        if distance < closest_distance:
+                            best_centroid = centroid
+                            closest_distance = distance
+                            face = faces[j]
+                    centroids.remove(best_centroid)
+                    faces.remove(face)
+
+                    self.region_graph.insert_face(face, r, best_centroid)
+                    self.region_planes[r] = 1 if region_name != 'cave' else 2
+                    self.region_graph.planes[r] = self.region_planes[r]
+                    self.region_graph.plot_colour[r] = plot_colour
+
+                    self.region_types[r] = region_type
+                    r += 1
 
         # Add Blocker regions - mountain blocker regions go into remaining faces then cave walls between cave regions
         for i, centroid in enumerate(centroids):

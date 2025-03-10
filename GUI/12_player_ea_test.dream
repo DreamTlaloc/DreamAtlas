@@ -14,15 +14,15 @@
 #pop_balancing 1
 
 #throne_region_num 12
-#water_region_type 1
+#water_region_type 2
 #water_region_num 3
-#cave_region_type 1
+#cave_region_type 2
 #cave_region_num 3
 #vast_region_num 3
 
 #player_neighbours 6
 #cap_connections 6
-#homeland_size 9
+#homeland_size 8
 #periphery_size 3
 
 -- Nations + Teams - use the nation number! [#nation nation_number team_number]
@@ -41,4 +41,3 @@
 
 -- Adds unconnected province for the omniscience mod nation in the underground
 #omniscience 1
-#disciples 1

@@ -171,7 +171,11 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
             height_dict[province.index] = height
         map_class.height_map[plane] = np.vectorize(lambda i: height_dict[i])(map_class.pixel_map[plane])
 
+    map_class.ygg_desc = 'example desc'
+    map_class.ygg_emoji = ':earth_africa:'
+
     generator_logging('DreamAtlas generation complete!')
     if ui is not None:
         ui.progress_bar.stop()
+
     return map_class

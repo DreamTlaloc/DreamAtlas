@@ -30,14 +30,14 @@ REGION_WATER_INFO = [
     [TERRAIN_PREF_BALANCED, LAYOUT_PREF_DEEPS, 0, 1],
     [TERRAIN_PREF_BALANCED, LAYOUT_PREF_DEEPS, 1, 1],
     [TERRAIN_PREF_BALANCED, LAYOUT_PREF_DEEPS, 3, 2],
-    [TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_DEEPS, 6, 3]
+    [TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_DEEPS, 5, 3]
 ]
 
 REGION_CAVE_INFO = [
     [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 0, 1],
     [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 1, 1],
     [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 3, 1],
-    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 5, 4]
+    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 6, 4]
 ]
 
 REGION_VAST_INFO = [0, 0, 0, 0, 0, 0]
@@ -201,19 +201,25 @@ NEIGHBOURS = [NEIGHBOURS_NO_WRAP, NEIGHBOURS_X_WRAP, NEIGHBOURS_Y_WRAP, NEIGHBOU
 
 PIXELS_PER_PROVINCE = 40000
 
-DATASET_GRAPHS = [[[] for i in range(7)] for d in range(17)]
+DATASET_GRAPHS = [[[] for i in range(7)] for d in range(41)]
+AVAILABLE_GRAPHS = np.zeros((41, 7), dtype=np.int8)
 vertex, graph_dict = 0, dict()
-with open(ROOT_DIR / 'databases/three_connected_graphs', 'r') as f:
+with open(ROOT_DIR / 'databases/expanded_graphs', 'r') as f:
     for line in f.readlines():
         data = line.split()
         if not data:
             DATASET_GRAPHS[vertex][degree].append(graph_dict)
+            AVAILABLE_GRAPHS[vertex, degree] = 1
             vertex = 0
             graph_dict = dict()
             continue
         vertex += 1
         degree = len(data) - 1
         graph_dict[int(data[0].strip(':'))] = [int(x) for x in data[1:]]
+
+NOT_AVAILABLE_GRAPHS = list()
+for i, j in np.argwhere(AVAILABLE_GRAPHS == 0):
+    NOT_AVAILABLE_GRAPHS.append([i, j])
 
 PERIPHERY_DATA = []
 with open(ROOT_DIR / 'databases/peripheries', 'r') as f:

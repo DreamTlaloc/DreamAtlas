@@ -53,6 +53,9 @@ class InputWidget(ttk.Frame):
             frames[-1].grid(row=index, column=0, sticky='NEWS', pady=5, padx=10)
 
             for i, attribute in enumerate(attributes):
+                if attribute == 'generation_info':
+                    self.info = GeneratorInfoWidget(frames[-1], cols=3)
+                    break
                 _, widget, label, options, active, tooltip = self.ui_config['attributes'][attribute]
 
                 if widget == 4:
@@ -72,7 +75,7 @@ class InputWidget(ttk.Frame):
 
                     self.labels[attribute] = ttk.Label(frames[-1], text=label, justify=ttk.CENTER)
                     self.labels[attribute].grid(row=row, column=col, sticky='NEWS', pady=5, padx=5)
-                    ToolTip(self.labels[attribute], text=tooltip, delay=750)
+                    ToolTip(self.labels[attribute], text=tooltip, delay=TOOLTIP_DELAY)
 
                     if widget == 0:
                         self.inputs[attribute] = ttk.Entry(frames[-1], textvariable=ttk.StringVar(), state=state)
@@ -89,9 +92,12 @@ class InputWidget(ttk.Frame):
                         else:
                             self.inputs[attribute] = ttk.Checkbutton(frames[-1], bootstyle="primary-round-toggle", variable=self.variables[attribute], state=state)
 
-                    self.inputs[attribute].grid(row=row, column=1+col, sticky='NEWS', pady=5, padx=10)
+                    if attribute == 'description':
+                        self.inputs[attribute].grid(row=row, column=1+col, sticky='NEWS', pady=5, padx=10, columnspan=4, rowspan=2)
+                    else:
+                        self.inputs[attribute].grid(row=row, column=1+col, sticky='NEWS', pady=5, padx=10)
 
-                ToolTip(self.inputs[attribute], text=tooltip, delay=750)
+                ToolTip(self.inputs[attribute], text=tooltip, delay=TOOLTIP_DELAY)
 
         if len(self.ui_config['buttons']) > 0:
             button_frame = ttk.Frame(self, bootstyle='primary')
@@ -156,14 +162,14 @@ class InputWidget(ttk.Frame):
         input_list = list()
 
         for attribute in self.ui_config['attributes']:
-            attribute_type, widget, _, options, active = self.ui_config['attributes'][attribute]
+            attribute_type, widget, _, options, active, __ = self.ui_config['attributes'][attribute]
             if active:
                 if widget == 0:
                     input_list.append(self.inputs[attribute].get())
                 if widget == 1:
                     input_list.append(options.index(self.inputs[attribute].get()))
                 elif widget == 7:
-                    input_list.append(self.inputs['cap_terrain'].terrain_int.get())
+                    input_list.append(self.inputs['terrain'].terrain_int.get())
 
         return input_list
 
@@ -267,7 +273,6 @@ class VanillaNationWidget(ttk.Frame):
 
             if self.variables[entry[0]].get():
                 nation_list.append([entry[0], 1])
-        print(self.age, nation_list)
         return nation_list
 
 
@@ -421,3 +426,89 @@ class IllwinterDropdownWidget(ttk.Frame):
 
     def get(self):
         return self.get_dict[self.variable]
+
+
+class GeneratorInfoWidget(ttk.Frame):
+
+    def __init__(self, master, cols):
+        super().__init__(master=master)
+        self.grid()
+
+        self.labels = dict()
+        self.variables = dict()
+        self.metrics = dict()
+
+        ttk.Button(self, text='Refresh', command=self.refresh).grid(row=0, column=0, sticky='NEWS', pady=5, padx=5)
+
+        GENERATOR_INFO = [['Number of provinces', 'text'],
+                          ['Number of water provinces', 'text'],
+                          ['Number of cave provinces', 'text'],
+                          ['Provinces per player', 'text'],
+                          ['Gold per player', 'text']]
+
+        for i, (text, tooltip) in enumerate(GENERATOR_INFO):
+
+            row, col = 1 + i // cols, cols * (i % cols)
+            self.labels[i] = ttk.Label(self, text=text, justify=ttk.RIGHT)
+            self.labels[i].grid(row=row, column=col, sticky='NEWS', pady=5, padx=5)
+
+            self.variables[i] = ttk.StringVar()
+            self.metrics[i] = ttk.Entry(self,  width=6, textvariable=self.variables[i], justify=ttk.CENTER)
+            self.metrics[i].grid(row=row, column=col+1, sticky='NEWS', pady=5, padx=5)
+
+            ToolTip(self.labels[i], text=tooltip, delay=TOOLTIP_DELAY)
+
+        self.labels[i+1] = ttk.Label(self, text='Input Issues?', justify=ttk.RIGHT)
+        self.labels[i+1].grid(row=row+1, column=0, sticky='NEWS', pady=5, padx=5)
+
+        self.metrics[i+1] = ttk.Entry(self)
+        self.metrics[i+1].grid(row=row+1, column=1, sticky='NEWS', pady=5, padx=5, columnspan=cols*3-1)
+
+    def refresh(self):
+
+        settings_dict = self.master.master.inputs
+        num_players = len(settings_dict['vanilla_nations'].get()) + len(settings_dict['custom_nations'].custom_nation_list) + len(settings_dict['custom_nations'].generic_nation_list)
+        if num_players == 0:
+            num_players = 1
+        water_provs = settings_dict['water_region_num'].get() * REGION_WATER_INFO[WATER_REGIONS.index(settings_dict['water_region_type'].get())][2] + 0.05 * num_players * settings_dict['periphery_size'].get() * settings_dict['player_neighbours'].get()
+        cave_provs = settings_dict['cave_region_num'].get() * REGION_CAVE_INFO[CAVE_REGIONS.index(settings_dict['cave_region_type'].get())][2]
+        num_provs = num_players * settings_dict['homeland_size'].get() + 0.5 * num_players * settings_dict['periphery_size'].get() * settings_dict['player_neighbours'].get() + settings_dict['throne_region_num'].get() + settings_dict['water_region_num'].get() * REGION_WATER_INFO[WATER_REGIONS.index(settings_dict['water_region_type'].get())][2] + cave_provs
+        provs_per_player = num_provs / num_players
+        gold_per_player = 300 + AGE_POPULATION_MODIFIERS[AGES.index(settings_dict['vanilla_nations'].age.get())] * 100 * num_provs / num_players
+
+        def error_check():
+            message = ''
+            error = False
+            if settings_dict['homeland_size'].get() <= settings_dict['cap_connections'].get():
+                message += 'Error: Homeland size must be greater than cap connections  '
+                error = True
+            if [num_players, settings_dict['player_neighbours'].get()] in NOT_AVAILABLE_GRAPHS:
+                message += 'Error: Invalid combination of players and neighbours  '
+                error = True
+            if error:
+                return message
+            else:
+                return 'You\'re good'
+
+        for i, j in enumerate(self.metrics):
+            entry = self.metrics[j]
+
+            if i == 0:
+                entry.delete(0, END)
+                entry.insert(1, str(num_provs))
+            elif i == 1:
+                entry.delete(0, END)
+                entry.insert(1, str(water_provs))
+            elif i == 2:
+                entry.delete(0, END)
+                entry.insert(1, str(cave_provs))
+            elif i == 3:
+                entry.delete(0, END)
+                entry.insert(1, str(provs_per_player))
+            elif i == 4:
+                entry.delete(0, END)
+                entry.insert(1, str(gold_per_player))
+            elif i == 5:
+                message = error_check()
+                entry.delete(0, END)
+                entry.insert(1, str(message))
