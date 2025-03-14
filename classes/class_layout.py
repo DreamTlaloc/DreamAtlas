@@ -153,14 +153,14 @@ class DominionsLayout:
         # Add Blocker regions - mountain blocker regions go into remaining faces then cave walls between cave regions
         for i, centroid in enumerate(centroids):
             face = faces[i]
+            if len(face) > 3:
+                self.region_graph.insert_face(face, r, centroid)
+                self.region_planes[r] = 1
+                self.region_graph.planes[r] = self.region_planes[r]
+                self.region_graph.plot_colour[r] = 'k'
 
-            self.region_graph.insert_face(face, r, centroid)
-            self.region_planes[r] = 1
-            self.region_graph.planes[r] = self.region_planes[r]
-            self.region_graph.plot_colour[r] = 'k'
-
-            self.region_types[r] = 6
-            r += 1
+                self.region_types[r] = 6
+                r += 1
 
         while r < num_regions + 20:
 
