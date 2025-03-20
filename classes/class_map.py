@@ -180,6 +180,9 @@ class DominionsMap:
         self.province_capital_locations = [[] for _ in range(10)]
         self.wraparound = NEIGHBOURS_FULL
 
+        self.ygg_desc = 'DreamAtlas empty map'
+        self.ygg_emoji = ':smile:'
+
     def load_file(self, filepath, plane=1):  # Instructs the map class to load in a file.
 
         if filepath.endswith('.map'):
@@ -493,6 +496,9 @@ class DominionsMap:
             if len(self.pixel_owner_list[plane]) != 0:
                 for i in self.pixel_owner_list[plane]:
                     f.write('#pb ' + ' '.join(map(str, i)) + '\n')
+
+            f.write('#ygg_desc ' + ' '.join(map(str, self.ygg_desc)) + '\n')
+            f.write('#ygg_emoji ' + ' '.join(map(str, self.ygg_desc)) + '\n')
 
             f.write('\n--The End\n')
             f.write('--(P.S. if you\'re reading this then I hope you have a nice day)')

@@ -14,7 +14,9 @@ TERRAIN_DATA = [
     [37, 137438953472, 'Has gate'], [38, 274877906944, 'Flooded'], [39, 549755813888, 'Attackers rout once'],
     # [40, 1099511627776, 'No effect'],
     # [41, 2199023255552, 'No effect'],
-    [59, 576460752303423488, 'Cave wall effect/draw as cave'], [60, 1152921504606846976, 'Draw as UW']
+    [59, 576460752303423488, 'Cave wall effect/draw as cave'], [60, 1152921504606846976, 'Draw as UW'],
+    [61, 2305843009213693952, '???'], [62, 4611686018427387904, '???']
+
     # 61, 62, 63, 64 worth checking, unlikely to go beyond 64
 ]
 

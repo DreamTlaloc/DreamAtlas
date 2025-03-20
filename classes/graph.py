@@ -399,7 +399,7 @@ class DreamAtlasGraph:
 
     def get_virtual_graph(self):
 
-        virtual_size = self.size
+        virtual_size = self.size + 1
         for i, j in self.get_all_connections():
             virtual_size += np.count_nonzero(self.darts[i, j])
         virtual_size = int(virtual_size)

@@ -350,7 +350,9 @@ class MainInterface(ttk.Frame):
 
     def generate_dreamatlas(self):
 
-        InputToplevel(master=self, title='Generate DreamAtlas Map', ui_config=UI_CONFIG_SETTINGS, cols=2, target_class=DreamAtlasSettings(0), map=self.map)
+        init_settings = DreamAtlasSettings(0)
+        init_settings.load_file(ROOT_DIR / 'databases/12_player_ea_test.dream')
+        InputToplevel(master=self, title='Generate DreamAtlas Map', ui_config=UI_CONFIG_SETTINGS, cols=2, target_class=init_settings, map=self.map)
 
     def load_map(self, folder):
 
@@ -369,6 +371,7 @@ class MainInterface(ttk.Frame):
 def run_interface():
     app = ttk.Window(title="DreamAtlas", themename='dreamfantasy', iconphoto=ART_ICON)
     app.place_window_center()
+    print(ROOT_DIR)
 
     def _config():
         x = 1

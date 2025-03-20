@@ -1,5 +1,7 @@
 import numpy as np
 import pathlib
+import os
+import sys
 
 # Terrain preference vector is the weighting for each type of terrain
 TERRAIN_PREF_BITS = [0, 16, 32, 64, 128, 256]
@@ -15,7 +17,7 @@ TERRAIN_PREF_BALANCED, TERRAIN_PREF_PLAINS, TERRAIN_PREF_FOREST, TERRAIN_PREF_MO
 
 # Layout preference vector informs the land-sea split
 LAYOUT_PREFERENCES = [  # LAYOUT_PREF_XXXX = [cap terrain, cap provinces ratio, extra provinces ratio]
-    [1, 1.0, 0.8],         # Land
+    [1, 1.0, 0.9],         # Land
     [1, 1.0, 1.0],          # Cave
     [1, 0.9, 0.8],          # Coast
     [1, 0.0, 0.9],          # Island
@@ -30,21 +32,21 @@ REGION_WATER_INFO = [
     [TERRAIN_PREF_BALANCED, LAYOUT_PREF_DEEPS, 0, 1],
     [TERRAIN_PREF_BALANCED, LAYOUT_PREF_DEEPS, 1, 1],
     [TERRAIN_PREF_BALANCED, LAYOUT_PREF_DEEPS, 3, 2],
-    [TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_DEEPS, 6, 3]
+    [TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_DEEPS, 5, 3]
 ]
 
 REGION_CAVE_INFO = [
     [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 0, 1],
     [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 1, 1],
     [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 3, 1],
-    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 5, 4]
+    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 6, 4]
 ]
 
 REGION_VAST_INFO = [0, 0, 0, 0, 0, 0]
 
 # Blocker vector informs how different blockers are created
 REGION_BLOCKER_INFO = {  # BLOCKER_XXXX = [plane, terrain int, region_size, anchor_connections]
-    6: [1, 8392704, 3, 2],                                      # Mountain Range
+    6: [1, 8388608, 3, 2],                                      # Mountain Range
     8: [2, 4096 + 68719476736 + 576460752303423488, 7, 6]       # Cave Wall
 }
 
@@ -165,7 +167,7 @@ PERIPHERY_INFO = [
     [TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_LAND],     # 2 MOUNTAINS
     [TERRAIN_PREF_DESERT, LAYOUT_PREF_LAND],        # 3 WASTES
     [TERRAIN_PREF_FOREST, LAYOUT_PREF_LAND],        # 4 DEEPWOODS
-    [TERRAIN_PREF_FOREST, LAYOUT_PREF_LAND],         # 5 OVERUNDER
+    [TERRAIN_PREF_FOREST, LAYOUT_PREF_LAND],        # 5 OVERUNDER
     [TERRAIN_PREF_BALANCED, LAYOUT_PREF_ISLAND],    # 6 ARCHIPELAGO
     [TERRAIN_PREF_SWAMP, LAYOUT_PREF_LAKES],        # 7 WETLANDS
     [TERRAIN_PREF_BALANCED, LAYOUT_PREF_DEEPS],     # 8 SEABED
@@ -183,7 +185,16 @@ NEIGHBOUR_SPECIAL_WEIGHTS = [0.8, 0.05, 0.05, 0, 0.05, 0.02, 0.05, 0]
 
 # UNIVERSAL FUNCTIONS AND VARIABLES
 ########################################################################################################################
-ROOT_DIR = pathlib.Path(__file__).parent.parent
+
+
+if getattr(sys, "frozen", False):
+    # If the 'frozen' flag is set, we are in bundled-app mode!
+    ROOT_DIR = pathlib.Path(__file__).parent.parent
+    print(ROOT_DIR)
+else:
+    # Normal development mode. Use os.getcwd() or __file__ as appropriate in your case...
+    ROOT_DIR = pathlib.Path(__file__).parent.parent
+
 AGES = ['Early Age', 'Middle Age', 'Late Age']
 
 CAPITAL_POPULATION = 40000
@@ -199,21 +210,27 @@ NEIGHBOURS_Y_WRAP = np.array([[0, 0], [0, 1], [0, -1]])
 NEIGHBOURS_FULL = np.array([[0, 0], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [0, -1], [-1, -1], [-1, 0]])
 NEIGHBOURS = [NEIGHBOURS_NO_WRAP, NEIGHBOURS_X_WRAP, NEIGHBOURS_Y_WRAP, NEIGHBOURS_FULL]
 
-PIXELS_PER_PROVINCE = 40000
+PIXELS_PER_PROVINCE = 53000
 
-DATASET_GRAPHS = [[[] for i in range(7)] for d in range(17)]
+DATASET_GRAPHS = [[[] for i in range(7)] for d in range(41)]
+AVAILABLE_GRAPHS = np.zeros((41, 7), dtype=np.int8)
 vertex, graph_dict = 0, dict()
-with open(ROOT_DIR / 'databases/three_connected_graphs', 'r') as f:
+with open(ROOT_DIR / 'databases/expanded_graphs', 'r') as f:
     for line in f.readlines():
         data = line.split()
         if not data:
             DATASET_GRAPHS[vertex][degree].append(graph_dict)
+            AVAILABLE_GRAPHS[vertex, degree] = 1
             vertex = 0
             graph_dict = dict()
             continue
         vertex += 1
         degree = len(data) - 1
         graph_dict[int(data[0].strip(':'))] = [int(x) for x in data[1:]]
+
+NOT_AVAILABLE_GRAPHS = list()
+for i, j in np.argwhere(AVAILABLE_GRAPHS == 0):
+    NOT_AVAILABLE_GRAPHS.append([i, j])
 
 PERIPHERY_DATA = []
 with open(ROOT_DIR / 'databases/peripheries', 'r') as f:

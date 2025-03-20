@@ -75,8 +75,8 @@ def nations_2_periphery(nations):
     return PERIPHERY_INFO[PERIPHERY_DATA[7*l1+t1][7*l2+t2]-1]
 
 
-COLOURS_PROVINCES = mpl.colormaps['tab20'].resampled(1000)
-COLOURS_REGIONS = mpl.colormaps['Pastel2'].resampled(300)
+COLOURS_PROVINCES = mpl.colormaps['tab20']
+COLOURS_REGIONS = mpl.colormaps['Pastel2']
 COLOURS_TERRAIN = mpl.colormaps['terrain']
 COLOURS_POPULATION = mpl.colormaps['Greens']
 COLOURS_RESOURCES = mpl.colormaps['Oranges']
@@ -108,54 +108,6 @@ def single_province_2_colours(province):  # ['Art', 'Provinces', 'Regions', 'Ter
     colour[5] = mpl.colors.rgb2hex(COLOURS_RESOURCES(0.003 * terrain_2_resource_stats(terrain_int2list(province.terrain_int), age=1)))
 
     return colour
-
-
-def find_graph_faces(graph, coordinates, darts, map_size):
-
-    edges_set, embedding = set(), dict()
-    for i in graph:  # edges_set is an undirected graph as a set of undirected edges
-        j_angles = list()
-        for j in graph[i]:
-            edges_set |= {(i, j), (j, i)}
-            vector = coordinates[j] + np.multiply(darts[i][graph[i].index(j)], map_size) - coordinates[i]
-            angle = 90-np.angle(vector[0] + vector[1] * 1j, deg=True)
-            j_angles.append([j, angle])
-
-        j_angles.sort(key=lambda x: x[1])
-        embedding[i] = [x[0] for x in j_angles]  # Format: v1:[v2,v3], v2:[v1], v3:[v1] clockwise ordering of neighbors at each vertex
-
-    faces, path = list(), list()  # Storage for face paths
-    path.append((i, j))
-    edges_set -= {(i, j)}
-
-    while len(edges_set) > 0:  # Trace faces
-        neighbors = embedding[path[-1][-1]]
-        next_node = neighbors[(neighbors.index(path[-1][-2]) + 1) % (len(neighbors))]
-        tup = (path[-1][-1], next_node)
-        if tup == path[0]:
-            faces.append(path)
-            path = list()
-            for edge in edges_set:  # Starts next path
-                path.append(edge)
-                edges_set -= {edge}
-                break  # Only one iteration
-        else:
-            path.append(tup)
-            edges_set -= {tup}
-    if len(path) != 0:
-        faces.append(path)
-
-    centroids = list()
-    for face in faces:
-        shift = np.subtract(np.divide(map_size, 2), coordinates[face[0][0]])
-        total = np.zeros(2)
-        for edge in face:
-            i = edge[0]
-            total += (np.add(coordinates[i], shift)) % map_size
-        coordinate = (-shift + total / len(face)) % map_size
-        centroids.append((int(coordinate[0]), int(coordinate[1])))
-
-    return faces, centroids
 
 
 def dibber(class_object, seed):  # Setting the random seed, when no seed is provided the class seed is used
