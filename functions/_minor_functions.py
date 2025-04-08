@@ -67,16 +67,29 @@ def terrain_2_population_weight(terrain_int: int) -> int:
     return weight
 
 
+def terrain_2_colour(terrain_int: int) -> float:
+
+    terrain_list = terrain_int2list(terrain_int)
+    col_float = 0.5
+
+    for t in terrain_list:
+        if t not in [1, 2, 512, 8192, 134217728, 67108864, 8589934592, 33554432, 549755813888, 576460752303423488]:
+            col_float += TERRAIN_2_HEIGHTS_DICT[t] / 1000
+
+    return col_float
+
+
 def nations_2_periphery(nations):
     t1 = TERRAIN_PREFERENCES.index(nations[0].terrain_profile)
     l1 = LAYOUT_PREFERENCES.index(nations[0].layout)
     t2 = TERRAIN_PREFERENCES.index(nations[1].terrain_profile)
     l2 = LAYOUT_PREFERENCES.index(nations[1].layout)
+    # print(nations[0].name, 7*l1+t1, nations[1].name, 7*l2+t2)
     return PERIPHERY_INFO[PERIPHERY_DATA[7*l1+t1][7*l2+t2]-1]
 
 
-COLOURS_PROVINCES = mpl.colormaps['tab20']
-COLOURS_REGIONS = mpl.colormaps['Pastel2']
+COLOURS_PROVINCES = mpl.colormaps['flag']
+COLOURS_REGIONS = mpl.colormaps['tab20']
 COLOURS_TERRAIN = mpl.colormaps['terrain']
 COLOURS_POPULATION = mpl.colormaps['Greens']
 COLOURS_RESOURCES = mpl.colormaps['Oranges']
@@ -86,21 +99,21 @@ def provinces_2_colours(province_list):  # Creates the pre-defined colours for a
 
     colours = list()
     for province in province_list:
-        colours.append(single_province_2_colours(province))
+        colours.append(single_province_2_colours(province, total_provs=len(province_list)))
 
     return colours
 
 
-def single_province_2_colours(province):  # ['Art', 'Provinces', 'Regions', 'Terrain', 'Population', 'Resources']
+def single_province_2_colours(province, total_provs):  # ['Art', 'Provinces', 'Regions', 'Terrain', 'Population', 'Resources']
 
     colour = ['pink'] * 6
 
-    colour[1] = mpl.colors.rgb2hex(COLOURS_PROVINCES(province.index))
+    colour[1] = mpl.colors.rgb2hex(COLOURS_PROVINCES(province.index/total_provs))
     if province.parent_region is None:
         colour[2] = mpl.colors.rgb2hex(COLOURS_REGIONS(1))
     else:
-        colour[2] = mpl.colors.rgb2hex(COLOURS_REGIONS(province.parent_region.index))
-    colour[3] = mpl.colors.rgb2hex(COLOURS_TERRAIN(province.terrain_int))
+        colour[2] = mpl.colors.rgb2hex(COLOURS_REGIONS(province.parent_region.index/total_provs))
+    colour[3] = mpl.colors.rgb2hex(COLOURS_TERRAIN(terrain_2_colour(province.terrain_int)))
     try:
         colour[4] = mpl.colors.rgb2hex(COLOURS_POPULATION(np.sqrt(province.population/50000)))
     except:

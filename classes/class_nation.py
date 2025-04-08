@@ -7,6 +7,7 @@ class Nation:
 
         # The nation index is used to lookup all the other properties of a nation from the .__init__ constants
         self.index, self.team = nation_data
+        self.iid = None
 
         # Nation info
         for entry in ALL_NATIONS:
@@ -37,6 +38,7 @@ class CustomNation:
         self.index, self.name, self.tagline, self.terrain, terrain_index, layout_index, self.home_plane, self.team = custom_nation_data
         self.terrain_profile = TERRAIN_PREFERENCES[terrain_index]
         self.layout = LAYOUT_PREFERENCES[layout_index]
+        self.iid = None
 
     def __str__(self):  # Printing the class returns this
 
@@ -54,6 +56,7 @@ class GenericNation:
         self.terrain_profile = TERRAIN_PREFERENCES[terrain_index]
         self.layout = LAYOUT_PREFERENCES[layout_index]
         self.name = 'Generic Nation'
+        self.iid = None
 
     def __str__(self):  # Printing the class returns this
 

@@ -54,14 +54,14 @@ class InputWidget(ttk.Frame):
 
             for i, attribute in enumerate(attributes):
                 if attribute == 'generation_info':
-                    self.info = GeneratorInfoWidget(frames[-1], cols=3)
+                    self.info = GeneratorInfoWidget(frames[-1], cols=4)
                     break
                 _, widget, label, options, active, tooltip = self.ui_config['attributes'][attribute]
 
                 if widget == 4:
-                    self.inputs['vanilla_nations'] = VanillaNationWidget(frames[-1], cols=5)
+                    self.inputs['vanilla_nations'] = VanillaNationWidget(frames[-1], cols=7)
                 elif widget == 5:
-                    self.inputs['custom_nations'] = CustomGenericNationWidget(frames[-1], cols=5)
+                    self.inputs['custom_nations'] = CustomGenericNationWidget(frames[-1], cols=7)
                 elif widget == 6:
                     self.inputs[attribute] = IllwinterDropdownWidget(frames[-1], attribute)
                     self.inputs[attribute].grid(row=i, column=0, sticky='NEWS', pady=5, padx=10, rowspan=2)
@@ -73,7 +73,7 @@ class InputWidget(ttk.Frame):
                         state = ttk.DISABLED
                     row, col = i // self.cols, self.cols * (i % self.cols)
 
-                    self.labels[attribute] = ttk.Label(frames[-1], text=label, justify=ttk.CENTER)
+                    self.labels[attribute] = ttk.Label(frames[-1], text=label, justify=ttk.CENTER, anchor="e")
                     self.labels[attribute].grid(row=row, column=col, sticky='NEWS', pady=5, padx=5)
                     ToolTip(self.labels[attribute], text=tooltip, delay=TOOLTIP_DELAY)
 
@@ -167,9 +167,14 @@ class InputWidget(ttk.Frame):
                 if widget == 0:
                     input_list.append(self.inputs[attribute].get())
                 if widget == 1:
-                    input_list.append(options.index(self.inputs[attribute].get()))
+                    if attribute == 'home_plane':
+                        input_list.append(1+options.index(self.inputs[attribute].get()))
+                    else:
+                        input_list.append(options.index(self.inputs[attribute].get()))
                 elif widget == 7:
                     input_list.append(self.inputs['terrain'].terrain_int.get())
+
+        input_list.append(1)  # Temporary fix for teams
 
         return input_list
 
@@ -189,10 +194,10 @@ class InputWidget(ttk.Frame):
 
     def save(self):
         self.input_2_class()
-        self.target_class.save_file(tkf.asksaveasfilename(parent=self.master, initialdir=ROOT_DIR))
+        self.target_class.save_file(tkf.asksaveasfilename(parent=self.master, initialdir=LOAD_DIR))
 
     def load(self):
-        self.target_class.load_file(tkf.askopenfilename(parent=self.master, initialdir=ROOT_DIR))
+        self.target_class.load_file(tkf.askopenfilename(parent=self.master, initialdir=LOAD_DIR))
         self.class_2_input()
 
     def clear(self):
@@ -377,7 +382,7 @@ class TerrainWidget(ttk.Frame):
         self.grid()
 
         self.terrain_int = ttk.IntVar()
-        ttk.Label(self, text='Terrain Integer').grid(row=0, column=0, sticky='NEWS', pady=5, padx=5)
+        ttk.Label(self, text='Terrain Integer', anchor="e").grid(row=0, column=0, sticky='NEWS', pady=5, padx=5)
         ttk.Entry(self, textvariable=self.terrain_int, state=ttk.READONLY).grid(row=0, column=1, sticky='NEWS', pady=5, padx=5)
 
         self.options = dict()
@@ -417,7 +422,7 @@ class IllwinterDropdownWidget(ttk.Frame):
             entries.append(j)
             self.get_dict[j] = i
 
-        ttk.Label(self, text=text).grid(row=0, column=0, sticky='NEWS', pady=5, padx=5)
+        ttk.Label(self, text=text).grid(row=0, column=0, sticky='NEWS', pady=5, padx=5, anchor="e")
 
         self.variable = ttk.StringVar()
         self.input = ttk.Combobox(self, values=entries, textvariable=self.variable, state=ttk.READONLY)
@@ -449,7 +454,7 @@ class GeneratorInfoWidget(ttk.Frame):
         for i, (text, tooltip) in enumerate(GENERATOR_INFO):
 
             row, col = 1 + i // cols, cols * (i % cols)
-            self.labels[i] = ttk.Label(self, text=text, justify=ttk.RIGHT)
+            self.labels[i] = ttk.Label(self, text=text, justify=ttk.RIGHT, anchor="e")
             self.labels[i].grid(row=row, column=col, sticky='NEWS', pady=5, padx=5)
 
             self.variables[i] = ttk.StringVar()
@@ -458,7 +463,7 @@ class GeneratorInfoWidget(ttk.Frame):
 
             ToolTip(self.labels[i], text=tooltip, delay=TOOLTIP_DELAY)
 
-        self.labels[i+1] = ttk.Label(self, text='Input Issues?', justify=ttk.RIGHT)
+        self.labels[i+1] = ttk.Label(self, text='Input Issues?', justify=ttk.RIGHT, anchor="e")
         self.labels[i+1].grid(row=row+1, column=0, sticky='NEWS', pady=5, padx=5)
 
         self.metrics[i+1] = ttk.Entry(self)

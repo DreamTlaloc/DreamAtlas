@@ -352,7 +352,7 @@ class MainInterface(ttk.Frame):
 
         init_settings = DreamAtlasSettings(0)
         init_settings.load_file(ROOT_DIR / 'databases/12_player_ea_test.dream')
-        InputToplevel(master=self, title='Generate DreamAtlas Map', ui_config=UI_CONFIG_SETTINGS, cols=2, target_class=init_settings, map=self.map)
+        InputToplevel(master=self, title='Generate DreamAtlas Map', ui_config=UI_CONFIG_SETTINGS, cols=3, target_class=init_settings, map=self.map)
 
     def load_map(self, folder):
 
@@ -371,7 +371,6 @@ class MainInterface(ttk.Frame):
 def run_interface():
     app = ttk.Window(title="DreamAtlas", themename='dreamfantasy', iconphoto=ART_ICON)
     app.place_window_center()
-    print(ROOT_DIR)
 
     def _config():
         x = 1
@@ -390,8 +389,8 @@ def run_interface():
     app.config(menu=menu)
     file_menu = ttk.Menu(menu, tearoff=0)  # The FILE dropdown menu
     file_menu.add_command(label="New", command=lambda: [ui.destroy(), ui.__init__(app)])
-    file_menu.add_command(label="Save", command=lambda: ui.save_map(tkf.asksaveasfilename(parent=app, initialdir=ROOT_DIR, initialfile=ui.map.map_title)))
-    file_menu.add_command(label="Load map", command=lambda: ui.load_map(tkf.askdirectory(parent=app, initialdir=ROOT_DIR)))
+    file_menu.add_command(label="Save", command=lambda: ui.save_map(tkf.asksaveasfilename(parent=app, initialdir=LOAD_DIR, initialfile=ui.map.map_title)))
+    file_menu.add_command(label="Load map", command=lambda: ui.load_map(tkf.askdirectory(parent=app, initialdir=LOAD_DIR)))
     # file_menu.add_command(label="Load file", command=lambda: ui.load_file(tkf.askopenfilename(parent=app, initialdir=ROOT_DIR.parent)))
     # file_menu.add_separator()
     # file_menu.add_command(label="Settings", command=_config)

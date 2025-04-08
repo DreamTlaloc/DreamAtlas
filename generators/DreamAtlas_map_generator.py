@@ -29,12 +29,14 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
         nation_list.append(CustomNation(custom_nation_data))
     for generic_nation_data in settings.generic_nations:
         nation_list.append(GenericNation(generic_nation_data))
-    rd.shuffle(nation_list)
+    # rd.shuffle(nation_list)
+    for i, nation in enumerate(nation_list):
+        nation.iid = i
 
     # Generate the player layout graph, determine the map size/region scale
     generator_logging('Making region layout...')
     pixels = np.asarray([0, 3000000], dtype=np.uint32)
-    homeland_region_num = len(settings.vanilla_nations) + len(settings.generic_nations) + len(settings.custom_nations)
+    homeland_region_num = len(nation_list)
     periphery_region_num = int(0.5 * settings.player_neighbours * homeland_region_num)
 
     pixels[0] += PIXELS_PER_PROVINCE * homeland_region_num * settings.homeland_size
@@ -42,15 +44,15 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
     pixels[0] += PIXELS_PER_PROVINCE * settings.throne_region_num
     pixels[0] += PIXELS_PER_PROVINCE * settings.water_region_num * REGION_WATER_INFO[settings.water_region_type][2]
     pixels[0] += PIXELS_PER_PROVINCE * settings.vast_region_num
-    pixels[1] += PIXELS_PER_PROVINCE * settings.cave_region_num * REGION_CAVE_INFO[settings.cave_region_type][2]
+    pixels[1] += PIXELS_PER_PROVINCE * settings.cave_region_num * REGION_CAVE_INFO[settings.cave_region_type][2] * 4
 
     map_class.map_size[1:3] = np.outer(np.sqrt(pixels), np.asarray([1, 0.588])).round(decimals=-2).astype(dtype=np.uint32)
     map_class.wraparound = NEIGHBOURS[settings.wraparound]
-    map_class.scale[1] = map_class.map_size[1] * np.asarray([0.04, 0.04])
+    map_class.scale[1] = map_class.map_size[1] * np.asarray([0.03, 0.03])
     map_class.scale[2] = map_class.map_size[2] * np.asarray([0.02, 0.02])
     map_class.planes = [1, 2]
     layout = DominionsLayout(map_class)
-    layout.generate_region_layout(settings=map_class.settings, map_size=map_class.map_size[1], seed=map_class.seed)
+    layout.generate_region_layout(settings=map_class.settings, map_size=map_class.map_size[1], nation_list=nation_list, seed=map_class.seed)
 
     # Assemble the regions and generate the initial province layout
     generator_logging('Making regions....')
@@ -64,7 +66,7 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
         region_type = layout.region_types[i]
 
         if region_type == 0:  # Generate the homelands
-            new_region = HomelandRegion(index=i, nation=nation_list[i], settings=settings, seed=seed)
+            new_region = HomelandRegion(index=i, nation=nation_list[i], settings=settings, seed=map_class.seed)
         elif region_type == 1:  # Generate the peripherals
             nations = list()
             for j in layout.region_graph.get_node_connections(i):
@@ -89,9 +91,9 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
         new_region.embed_region(global_coordinates=layout.region_graph.coordinates[i], scale=map_class.scale, map_size=map_class.map_size)
 
         for province in new_region.provinces:
-            province.index = province_index[province.plane]
-            province_list[province.plane].append(province)
-            province_index[province.plane] += 1
+            province.index = province_index[new_region.plane]
+            province_list[new_region.plane].append(province)
+            province_index[new_region.plane] += 1
 
     special_start_locations = list()    # Generate the special start locations
     for region in region_list[0]:
@@ -174,7 +176,7 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
     map_class.ygg_desc = 'example desc'
     map_class.ygg_emoji = ':earth_africa:'
 
-    generator_logging('DreamAtlas generation complete!')
+    generator_logging('Loading into UI...')
     if ui is not None:
         ui.progress_bar.stop()
     return map_class

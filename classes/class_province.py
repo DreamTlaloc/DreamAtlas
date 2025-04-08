@@ -40,6 +40,7 @@ class Province:
 
         # Province properties
         self.terrain_int = terrain_int
+        self.has_gate = False
         self.capital_location = capital_location
         self.capital_nation = capital_nation
         self.parent_region = parent_region
