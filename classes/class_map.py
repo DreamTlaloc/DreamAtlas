@@ -413,8 +413,8 @@ class DominionsMap:
             f.write('#mapdomcol ' + ' '.join(map(str, self.map_dom_colour)) + '\n')
             if plane == 2:
                 f.write('#planename The Realm Beneath\n')
-            if self.victory_type is not None:
-                f.write('#victorycondition %s %s\n' % (self.victory_type[0], self.victory_type[1]))
+            # if self.victory_type is not None:
+            #     f.write('#victorycondition %s %s\n' % (self.victory_type[0], self.victory_type[1]))
 
             f.write('#nodeepcaves\n')
             f.write('#nodeepchoice\n')
@@ -447,7 +447,7 @@ class DominionsMap:
                 for entry in range(len(self.no_start_locations[plane])):
                     f.write('#nostart %s\n' % self.no_start_locations[plane][entry])
             if plane == 1:
-                if len(self.special_start_locations[plane]) != 0:
+                if len(self.special_start_locations) != 0:
                     for entry in range(len(self.special_start_locations)):
                         f.write('#specstart ' + ' '.join(map(str, self.special_start_locations[entry])) + '\n')
             if len(self.team_start_locations[plane]) != 0:
@@ -484,6 +484,8 @@ class DominionsMap:
                 for i in self.gate_list[plane]:
                     f.write('#gate ' + ' '.join(map(str, i)) + '\n')
 
+            f.write('\n--Province info\n')
+
             # Province commands
             for province in self.province_list[plane]:
                 if province.has_commands:
@@ -497,8 +499,13 @@ class DominionsMap:
                 for i in self.pixel_owner_list[plane]:
                     f.write('#pb ' + ' '.join(map(str, i)) + '\n')
 
-            f.write('#ygg_desc ' + ' '.join(map(str, self.ygg_desc)) + '\n')
-            f.write('#ygg_emoji ' + ' '.join(map(str, self.ygg_desc)) + '\n')
+            f.write('$ygg_desc ' + ' '.join(map(str, self.ygg_desc)) + '\n')
+            f.write('$ygg_emoji ' + ' '.join(map(str, self.ygg_desc)) + '\n')
+
+            f.write('\n--Version 1.1.4\n')
+            if self.settings is not None:
+                for attribute in self.settings.__dict__:
+                    f.write('$%s %s\n' % (attribute, self.settings.__dict__[attribute]))
 
             f.write('\n--The End\n')
             f.write('--(P.S. if you\'re reading this then I hope you have a nice day)')

@@ -26,57 +26,54 @@ class DominionsLayout:
     def generate_region_layout(self,
                                settings: DreamAtlasSettings,
                                map_size: np.array,
+                               nation_list: list,
                                seed: int = None):
         dibber(self, seed)  # Setting random seed
 
-        player_team_plane = list()
-        for nation_data in settings.vanilla_nations:
-            nation = Nation(nation_data)
-            player_team_plane.append([nation.index, nation.team, nation.home_plane])
-        for custom_nation_data in settings.custom_nations:
-            nation = CustomNation(custom_nation_data)
-            player_team_plane.append([nation.index, nation.team, nation.home_plane])
-        for generic_nation_data in settings.generic_nations:
-            nation = GenericNation(generic_nation_data)
-            player_team_plane.append([0, nation.team, nation.home_plane])
-
         teams = dict()
-        for player, team, plane in player_team_plane:  # Analyse player teams
+        ug_starts = 0
+        for nation in nation_list:  # Analyse player teams
+            iid, team = nation.iid, nation.team
             if team not in teams:
-                teams[team] = [player]
+                teams[team] = [iid]
             else:
-                teams[team].append(player)
+                teams[team].append(iid)
+            if nation.home_plane == 2:
+                ug_starts += 1
 
-        homeland_region_num = len(player_team_plane)
+        homeland_region_num = len(nation_list)
         periphery_region_num = int(0.5 * settings.player_neighbours * homeland_region_num)
-        num_regions = homeland_region_num + periphery_region_num + settings.throne_region_num + settings.water_region_num + settings.cave_region_num + settings.vast_region_num
+        blockers = 5 * (settings.cave_region_num + ug_starts) + 20
+        num_regions = homeland_region_num + periphery_region_num + settings.throne_region_num + settings.water_region_num + settings.cave_region_num + settings.vast_region_num + blockers
 
-        self.region_graph = DreamAtlasGraph(size=num_regions+20, map_size=map_size, wraparound=self.wraparound)
-        initial_graph = copy(rd.choice(DATASET_GRAPHS[len(player_team_plane)][settings.player_neighbours]))  # Select an initial layout
+        self.region_graph = DreamAtlasGraph(size=num_regions, map_size=map_size, wraparound=self.wraparound)
+        initial_graph = copy(rd.choice(DATASET_GRAPHS[len(nation_list)][settings.player_neighbours]))  # Select an initial layout
 
-        nation_dict = dict()
         self.region_planes = dict()
         self.region_types = dict()
         r = 0
 
         # Add Homeland regions
-        for i in range(homeland_region_num):
+        for i, nation in enumerate(nation_list):
             for j in initial_graph[i+1]:
                 self.region_graph.connect_nodes(i, j-1)
-            self.region_graph.planes[i] = player_team_plane[i][2]
-            self.region_graph.plot_colour[i] = 'b*'
-
-            nation_dict[r] = player_team_plane[i][0]
-            self.region_planes[r] = player_team_plane[i][2]
+            self.region_graph.planes[i] = nation.home_plane
+            self.region_planes[r] = nation.home_plane
             self.region_types[r] = 0
             r += 1
 
         weights = dict()
-        for i in range(len(player_team_plane)):
+        for i in range(len(nation_list)):
             weights[i] = 1
 
         self.region_graph.embed_graph(initial_graph, seed)
         self.region_graph.spring_adjustment()
+
+        # homeland_coords = self.region_graph.coordinates[0:len(nation_list)]
+        # codebook, distortion = sccvq.kmeans(obs=np.array(homeland_coords, dtype=np.float32), k_or_guess=len(teams))
+        # code, distortion = sccvq.vq(homeland_coords, codebook)
+        # print(code)
+        # for j in code:
 
         # Add Peripheral regions
         done_edges = set()
@@ -84,21 +81,19 @@ class DominionsLayout:
             if (j, i) not in done_edges:
                 done_edges.add((i, j))
                 self.region_graph.insert_connection(i, j, r)
-
-                nation_dict[r] = [nation_dict[i], nation_dict[j]]
                 self.region_planes[r] = 1
                 self.region_types[r] = 1
                 r += 1
 
         faces, centroids = self.region_graph.get_faces_centroids()
 
-        region_types = [(settings.throne_region_num, 2, 'throne', 'y*'),
-                        (settings.water_region_num, 3, 'water', 'c*'),
-                        (settings.cave_region_num, 4, 'cave', 'g*'),
-                        (settings.vast_region_num, 5, 'vast', 'm*')]
+        region_types = [(settings.throne_region_num, 2, 'throne'),
+                        (settings.water_region_num, 3, 'water'),
+                        (settings.cave_region_num, 4, 'cave'),
+                        (settings.vast_region_num, 5, 'vast')]
 
         extras = False
-        for region_num, region_type, region_name, plot_colour in region_types:
+        for region_num, region_type, region_name in region_types:
             if region_num == 0:
                 continue
             if region_num <= len(centroids):
@@ -121,8 +116,6 @@ class DominionsLayout:
                 self.region_graph.insert_face(face, r, best_centroid)
                 self.region_planes[r] = 1 if region_name != 'cave' else 2
                 self.region_graph.planes[r] = self.region_planes[r]
-                self.region_graph.plot_colour[r] = plot_colour
-
                 self.region_types[r] = region_type
                 r += 1
 
@@ -145,33 +138,35 @@ class DominionsLayout:
                     self.region_graph.insert_face(face, r, best_centroid)
                     self.region_planes[r] = 1 if region_name != 'cave' else 2
                     self.region_graph.planes[r] = self.region_planes[r]
-                    self.region_graph.plot_colour[r] = plot_colour
-
                     self.region_types[r] = region_type
                     r += 1
 
-        # Add Blocker regions - mountain blocker regions go into remaining faces then cave walls between cave regions
-        for i, centroid in enumerate(centroids):
-            face = faces[i]
+        # Add Blocker regions - mountain blocker regions go into non-triangular surface faces then cave walls between cave regions
+        faces, centroids = self.region_graph.get_faces_centroids(planes=[1])
+        for i, face in enumerate(faces):
             if len(face) > 3:
-                self.region_graph.insert_face(face, r, centroid)
+                self.region_graph.insert_face(face, r, centroids[i])
                 self.region_planes[r] = 1
                 self.region_graph.planes[r] = self.region_planes[r]
-                self.region_graph.plot_colour[r] = 'k'
-
                 self.region_types[r] = 6
                 r += 1
 
-        while r < num_regions + 20:
+        self.region_graph.make_delaunay_graph(planes=[2])  # Adding cave walls
+        faces, centroids = self.region_graph.get_faces_centroids(planes=[2])
+        for i, j in self.region_graph.get_all_connections():
+            if self.region_planes[i] == 2 and self.region_planes[j] == 2:
+                self.region_graph.insert_connection(i, j, r)
+                self.region_planes[r] = 2
+                self.region_graph.planes[r] = self.region_planes[r]
+                self.region_types[r] = 8
+                r += 1
 
-            self.region_graph.coordinates[r] = [rd.randint(0, map_size[0]), rd.randint(0, map_size[0])]
+        for i, face in enumerate(faces):
+            self.region_graph.insert_face(face, r, centroids[i])
             self.region_planes[r] = 2
             self.region_graph.planes[r] = self.region_planes[r]
-            self.region_graph.plot_colour[r] = 'k'
-
             self.region_types[r] = 8
             r += 1
-        self.region_graph.make_delaunay_graph(planes=[2])
 
         # Final Adjustment
         self.region_graph.spring_adjustment()
@@ -215,80 +210,84 @@ class DominionsLayout:
         for i, j in self.neighbours[plane]:  # Randomly assigns special connections
             i_j_provs = [index_2_prov[i], index_2_prov[j]]
             choice = int(rd.choices(SPECIAL_NEIGHBOUR, NEIGHBOUR_SPECIAL_WEIGHTS)[0][0])
-            if choice != 0:
-                fail = False
-                for index in range(2):
-                    ti = i_j_provs[index].terrain_int
-                    if i_j_provs[index].capital_location:  # Ignore caps
-                        fail = True
-                    elif has_terrain(ti, 4):
-                        fail = True
-                    elif has_terrain(ti, 4096):
-                        fail = True
-                    elif has_terrain(ti, 68719476736):  # if cave wall
-                        self.special_neighbours[plane].append([i, j, 4])
-                        fail = True
-                    elif type(i_j_provs[index].parent_region) is BlockerRegion:  # if blocker
-                        self.special_neighbours[plane].append([i, j, 36])
-                        fail = True
-                    elif (choice == 33 or choice == 36) and not has_terrain(ti, 8388608):
-                        i_j_provs[index].terrain_int += 8388608
-                if not fail:
-                    self.special_neighbours[plane].append([i, j, choice])
+            fail = False
+            for index in range(2):
+                ti = i_j_provs[index].terrain_int
+                if i_j_provs[index].capital_location:  # Ignore caps
+                    fail = True
+                elif has_terrain(ti, 68719476736):  # if cave wall
+                    self.special_neighbours[plane].append([i, j, 4])
+                    fail = True
+                elif self.region_types[i_j_provs[index].parent_region.index] == 6:  # if blocker
+                    self.special_neighbours[plane].append([i, j, 36])
+                    fail = True
+                elif has_terrain(ti, 4):
+                    fail = True
+                elif has_terrain(ti, 4096):
+                    fail = True
+                elif (choice == 33 or choice == 36) and not has_terrain(ti, 8388608):
+                    i_j_provs[index].terrain_int += 8388608
+            if not fail and choice != 0:
+                self.special_neighbours[plane].append([i, j, choice])
 
     def generate_gates(self, region_list, seed: int = None):
         dibber(self, seed)  # Setting random seed
         self.gates = [[] for _ in range(10)]
         gate = 1
+
         for region_type in [0, 4]:
             for i, i_region in enumerate(region_list[region_type]):
 
-                possible_j_regions = list()
-                for j, j_region in enumerate(region_list[1]):
-                    if self.region_graph.graph[i_region.index, j_region.index]:
-                        possible_j_regions.append(j_region)
-                rd.shuffle(possible_j_regions)
+                if self.region_planes[i_region.index] == 2:
+                    possible_j_regions = list()
+                    for j, j_region in enumerate(region_list[1]):
+                        if self.region_graph.graph[i_region.index, j_region.index]:
+                            possible_j_regions.append(j_region)
+                    rd.shuffle(possible_j_regions)
 
-                gates_num = 2
-                start = 0
-                if region_type == 0:
-                    gates_num = 3
-                    start = 1
+                    gates_num = REGION_CAVE_INFO[self.map.settings.cave_region_type][4]  # How many gates per region
+                    start = 0
+                    if region_type == 0:
+                        gates_num = 3
+                        start = 1
 
-                for j_region in possible_j_regions[0:gates_num]:
-                    i_province = rd.choice(i_region.provinces[start:])
-                    j_province = rd.choice(j_region.provinces)
-
-                    self.gates[1].append([j_province.index, gate])
-                    self.gates[2].append([i_province.index, gate])
-                    gate += 1
+                    i_provinces = rd.sample(i_region.provinces[start:], k=gates_num)
+                    for j, j_region in enumerate(possible_j_regions[0:gates_num]):
+                        for province in j_region.provinces:
+                            if not province.has_gate:
+                                j_province = province
+                        j_province.has_gate = True
+                        self.gates[1].append([j_province.index, gate])
+                        self.gates[2].append([i_provinces[j].index, gate])
+                        gate += 1
 
     def plot(self):
 
-        fig, axs = plt.subplots(3, 1)
-        ax_regions = axs[0]
-        ax_provinces = axs[1:]
+        fig_regions, axs_regions = plt.subplots(3, 1)
+        axs_regions[0].remove()
+        axs_regions[0] = fig_regions.add_subplot(3, 1, 1, projection='3d')
 
         # Plot regions
         virtual_graph, virtual_coordinates = self.region_graph.get_virtual_graph()
-        done_edges = set()
-        for i in virtual_graph:  # region connections
-            x0, y0 = virtual_coordinates[i]
-            for j in virtual_graph[i]:
-                if (i, j) not in done_edges:
-                    done_edges.add((j, i))
-                    x1, y1 = virtual_coordinates[j]
-                    colour = 'k-'
-                    if i in self.region_types:
-                        if self.region_types[i] == 4:
-                            colour = 'k--'
-                    ax_regions.plot([x0, x1], [y0, y1], colour)
 
-        region_colours = ['g*', 'rD', 'y^', 'bo', 'rv', 'ms', 'kX']
-        for i, (x0, y0) in enumerate(self.region_graph.coordinates):
-            ax_regions.plot(x0, y0, region_colours[self.region_types[i]])
-            ax_regions.text(x0, y0, str(i))
-        ax_regions.set(xlim=(0, self.map_size[1][0]), ylim=(0, self.map_size[1][1]))
+        for i, (x, y) in enumerate(virtual_coordinates):  # region connections
+            if i in self.region_types:
+                for j in self.region_graph.get_node_connections(i):
+                    x2, y2 = virtual_coordinates[j[0]]
+                    edge_col = 'k--'
+                    if self.region_planes[i] == self.region_planes[j[0]]:
+                        axs_regions[self.region_graph.planes[i]].plot([x, x2], [y, y2], 'k-')
+                        edge_col = 'k-'
+                    axs_regions[0].plot([x, x2], [y, y2], [100-self.region_graph.planes[i]*100, 100-self.region_graph.planes[j[0]]*100], edge_col)
+
+        region_colours = ['g*', 'rD', 'y^', 'bo', 'rv', 'ms', 'kX', 'kX', 'kX']
+        for i, (x, y) in enumerate(virtual_coordinates):  # region connections
+            if i in self.region_types:
+                axs_regions[0].plot(x, y, 100-self.region_graph.planes[i]*100, region_colours[self.region_types[i]])
+                axs_regions[self.region_graph.planes[i]].plot(x, y, region_colours[self.region_types[i]])
+                axs_regions[self.region_graph.planes[i]].text(x, y, str(i))
+
+        # axs_regions.set(xlim=(0, self.map_size[1][0]), ylim=(0, self.map_size[1][1]))
 
         # # Plot provinces
         # for i, plane in enumerate(self.map.planes):

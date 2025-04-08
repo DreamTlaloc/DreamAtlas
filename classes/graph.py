@@ -212,22 +212,23 @@ class DreamAtlasGraph:
 
         edges_set, embedding = set(), dict()
         for i in range(self.size):  # edges_set is an undirected graph as a set of undirected edges
-            j_angles = list()
-            connections = self.get_node_connections(i)
-            if len(connections) > 0:
-                for j in connections:
-                    if self.planes[j] in planes:
-                        j = j[0]
-                        edges_set |= {(i, j), (j, i)}
-                        vector = self.get_vector(i, j)
-                        angle = 90 - np.angle(vector[0] + vector[1] * 1j, deg=True)
-                        j_angles.append([j, angle])
-
-                j_angles.sort(key=lambda x: x[1])
-                embedding[i] = [x[0] for x in j_angles]  # Format: v1:[v2,v3], v2:[v1], v3:[v1] clockwise ordering of neighbors at each vertex
+            if self.planes[i] in planes:
+                connections = self.get_node_connections(i)
+                j_angles = list()
+                if len(connections) > 0:
+                    for j in connections:
+                        if self.planes[j] in planes:
+                            j = j[0]
+                            edges_set |= {(i, j), (j, i)}
+                            vector = self.get_vector(i, j)
+                            j_angles.append([j, np.angle(vector[0] + vector[1] * 1j, deg=True)])
+                    if len(j_angles) > 0:
+                        j_angles.sort(key=lambda x: x[1])
+                        embedding[i] = [x[0] for x in j_angles]  # Format: v1:[v2,v3], v2:[v1], v3:[v1] clockwise ordering of neighbors at each vertex
 
         faces, path = list(), list()  # Storage for face paths
-        first_path = (0, embedding[0][0])
+        first_key = list(embedding.keys())[0]
+        first_path = (first_key, embedding[first_key][0])
         path.append(first_path)
         edges_set -= {first_path}
 

@@ -1,7 +1,6 @@
 import queue
 import threading
 from DreamAtlas import *
-from DreamAtlas.GUI.ui_data import ART_ICON
 
 
 class GeneratorLoadingWidget(ttk.Toplevel):
@@ -22,20 +21,17 @@ class GeneratorLoadingWidget(ttk.Toplevel):
         self.status_label.grid(row=1, column=0, sticky='NEWS', pady=2)
 
     def generate(self):
-
-        self.master.map = generator_dreamatlas(settings=self.settings, ui=self)
-        self.master.update_gui()
-        self.destroy()
-        # self.queue = queue.Queue()  # Some funky threading to make this work
-        # self.generator = ThreadedGenerator(self.queue, self, self.settings).start()
-        # self.after(100, self.process_queue)
+        self.queue = queue.Queue()
+        self.generator = ThreadedGenerator(self.queue, self, self.settings)
+        self.generator.start()
+        self.after(100, self.process_queue)
 
     def process_queue(self):
         try:
             msg = self.queue.get_nowait()
             if msg == "Task finished":
                 self.master.map = self.generator.map
-
+                self.master.update_gui()
                 self.destroy()
         except queue.Empty:
             self.after(100, self.process_queue)
@@ -49,5 +45,5 @@ class ThreadedGenerator(threading.Thread):
         self.settings = settings
 
     def run(self):
-        self.map = generator_dreamatlas(settings=self.settings, ui=self.ui, queue=self.queue)
+        self.map = generator_dreamatlas(settings=self.settings, ui=self.ui)
         self.queue.put("Task finished")

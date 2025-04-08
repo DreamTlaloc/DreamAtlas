@@ -84,9 +84,9 @@ UI_CONFIG_REGION = [
 
 UI_CONFIG_SETTINGS = {
     'label_frames': [
-        ['Map Info', ['map_title', 'seed', 'description']],
+        ['Map Info', ['map_title', 'seed']],
         ['General Settings', ['art_style', 'wraparound', 'pop_balancing', 'site_frequency', 'cap_connections', 'player_neighbours']],
-        ['Region Settings', ['homeland_size', 'periphery_size', 'water_region_type', 'cave_region_type', 'water_region_num', 'cave_region_num', 'throne_region_num', 'vast_region_num']],
+        ['Region Settings', ['homeland_size', 'periphery_size', 'throne_region_num', 'water_region_num', 'cave_region_num', 'vast_region_num', 'water_region_type', 'cave_region_type']],
         ['Additional Options', ['disciples', 'omniscience']],
         ['Nations & Teams', ['vanilla_nations']],
         ['Generic/Custom Nations', ['custom_nations']],
@@ -95,7 +95,7 @@ UI_CONFIG_SETTINGS = {
     'attributes': {
         'map_title': [str, 0, 'Map Title', None, 1, 'Enter the title of the map'],
         'seed': [int, 0, 'Seed', None, 1, 'Enter the random seed for map generation'],
-        'description': [str, 0, 'Description', None, 1, 'Enter a description for the map'],
+        # 'description': [str, 0, 'Description', None, 1, 'Enter a description for the map'],
 
         'art_style': [int, 1, 'Art Style', ['.d6m'], 1, 'Select the art style for the map'],
         'wraparound': [int, 1, 'Wraparound', ['None', 'Horizontal', 'Vertical', 'Full'], 1, 'Select the wraparound type for the map'],
@@ -134,6 +134,5 @@ EXPLORER_REGIONS = ["Homelands", "Peripheries", "Thrones", "Water", "Caves", "Va
 
 TOOLTIP_DELAY = 500
 
-ART_ICON = r'C:\Users\amyau\PycharmProjects\mapTlaloc\DreamAtlas\GUI\gui_art\DreamAtlasLogoSquare.png'
 UI_STATES = (ttk.DISABLED, ttk.NORMAL, ttk.HIDDEN)
 UI_CONNECTION_COLOURS = {0: 'black', 33: 'red', 2: 'blue', 4: 'grey', 8: 'green', 16: 'brown', 36: 'red', 3: 'pink'}  # [0, 'Standard border'], [33, 'Mountain pass'], [2, 'River border'], [4, 'Impassable'], [8, 'Road'], [16, 'River bridge'], [36, 'Impassable mountain'], [3, 'Waterfalls']

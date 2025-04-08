@@ -5,7 +5,7 @@ class DreamAtlasSettings:
 
         self.index = index
         self.seed: int = 0
-        self.description: str = None
+        self.description: str = 'DreamAtlas map'
         self.map_title: str = None
 
         self.homeland_size: int = None
@@ -27,8 +27,8 @@ class DreamAtlasSettings:
         self.custom_nations: list = list()
         self.generic_nations: list = list()
         self.age: int = 0
-        self.disciples: bool = False
-        self.omniscience: bool = False
+        self.disciples: int = 0
+        self.omniscience: int = 0
 
     def load_file(self, filename):
 

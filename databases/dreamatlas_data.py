@@ -6,9 +6,9 @@ import sys
 # Terrain preference vector is the weighting for each type of terrain
 TERRAIN_PREF_BITS = [0, 16, 32, 64, 128, 256]
 TERRAIN_PREFERENCES = [         # TERRAIN_PREF_XXXX = [plains, highlands, swamp, waste, forest, farm]
-    [5, 1, 1, 1, 2, 1],         # Balanced
+    [5, 1, 1, 1, 1, 1],         # Balanced
     [10, 1, 2, 1, 0.5, 0.5],    # Plains
-    [3, 1, 1, 0.5, 5, 2],       # Forest
+    [3, 1, 1, 0.5, 5, 1],       # Forest
     [3, 4, 1, 1, 2, 1],         # Mountains
     [3, 1, 1, 2, 1, 1],         # Desert
     [3, 1, 3, 0.5, 2, 1],       # Swamp
@@ -17,7 +17,7 @@ TERRAIN_PREF_BALANCED, TERRAIN_PREF_PLAINS, TERRAIN_PREF_FOREST, TERRAIN_PREF_MO
 
 # Layout preference vector informs the land-sea split
 LAYOUT_PREFERENCES = [  # LAYOUT_PREF_XXXX = [cap terrain, cap provinces ratio, extra provinces ratio]
-    [1, 1.0, 0.9],         # Land
+    [1, 1.0, 0.9],          # Land
     [1, 1.0, 1.0],          # Cave
     [1, 0.9, 0.8],          # Coast
     [1, 0.0, 0.9],          # Island
@@ -36,18 +36,18 @@ REGION_WATER_INFO = [
 ]
 
 REGION_CAVE_INFO = [
-    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 0, 1],
-    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 1, 1],
-    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 3, 1],
-    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 6, 4]
+    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 0, 1, 0],
+    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 1, 1, 1],
+    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 3, 1, 2],
+    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 6, 4, 3]
 ]
 
 REGION_VAST_INFO = [0, 0, 0, 0, 0, 0]
 
 # Blocker vector informs how different blockers are created
 REGION_BLOCKER_INFO = {  # BLOCKER_XXXX = [plane, terrain int, region_size, anchor_connections]
-    6: [1, 8388608, 3, 2],                                      # Mountain Range
-    8: [2, 4096 + 68719476736 + 576460752303423488, 7, 6]       # Cave Wall
+    6: [1, 16 + 8388608 + 68719476736 + 549755813888, 3, 2],    # Mountain Range
+    8: [2, 4096 + 68719476736 + 576460752303423488, 4, 6]       # Cave Wall
 }
 
 HOMELANDS_INFO = [  # Homelands format: [Nation index, terrain preference, layout preference, capital terrain int, plane]
@@ -113,7 +113,7 @@ HOMELANDS_INFO = [  # Homelands format: [Nation index, terrain preference, layou
     [71, TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_LAND, 8388608, 1],     # Caelum
     [72, TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_LAND, 8388608, 1],     # Nazca
     [73, TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 0, 1],            # Mictlan
-    [74, TERRAIN_PREF_SWAMP, LAYOUT_PREF_LAKES, 4128, 2],            # Xibalba
+    [74, TERRAIN_PREF_SWAMP, LAYOUT_PREF_CAVE, 4128, 2],            # Xibalba
     [75, TERRAIN_PREF_SWAMP, LAYOUT_PREF_LAND, 32, 1],              # Ctis
     [76, TERRAIN_PREF_FOREST, LAYOUT_PREF_LAND, 0, 1],              # Machaka
     [77, TERRAIN_PREF_BALANCED, LAYOUT_PREF_ISLAND, 0, 1],          # Phaeacia
@@ -176,7 +176,7 @@ PERIPHERY_INFO = [
     [TERRAIN_PREF_BALANCED, LAYOUT_PREF_DEEPS]      # 11 UNDERSEA
 ]
 
-TERRAIN_2_HEIGHTS_DICT = {0: 0, 4: -600, 16: 200, 32: 50, 64: 300, 128: 90, 256: 250, 2048: -200, 4096: 1000, 8388608: 500, 68719476736: -100}
+TERRAIN_2_HEIGHTS_DICT = {0: 0, 4: -400, 16: 200, 32: 50, 64: 300, 128: 90, 256: 250, 2048: -100, 4096: 1000, 8388608: 500, 68719476736: -100}
 TERRAIN_2_SHAPES_DICT = {0: 1, 4: 1.1, 8: 0.9, 16: 0.9, 32: 1.1, 64: 1.2, 128: 1.2, 256: 0.9, 2048: 1, 4096: 1.1, 8388608: 1, 68719476736: 1}
 TERRAIN_POPULATION_ORDER = {0: 4, 16: 2, 32: 1, 64: 0, 128: 3, 256: 5}  # TERRAIN_PREF_XXXX = [plains, highlands, swamp, waste, forest, farm]
 
@@ -185,15 +185,18 @@ NEIGHBOUR_SPECIAL_WEIGHTS = [0.8, 0.05, 0.05, 0, 0.05, 0.02, 0.05, 0]
 
 # UNIVERSAL FUNCTIONS AND VARIABLES
 ########################################################################################################################
-
-
 if getattr(sys, "frozen", False):
-    # If the 'frozen' flag is set, we are in bundled-app mode!
+    # If the application is run as a bundle, the PyInstaller bootloader
+    # extends the sys module by a flag frozen=True and sets the app
+    # path into variable
     ROOT_DIR = pathlib.Path(__file__).parent.parent
-    print(ROOT_DIR)
+    LOAD_DIR = pathlib.Path(sys.executable).parent
+    ART_ICON = ROOT_DIR / r'databases/DreamAtlasLogoSquare.png'
 else:
     # Normal development mode. Use os.getcwd() or __file__ as appropriate in your case...
     ROOT_DIR = pathlib.Path(__file__).parent.parent
+    LOAD_DIR = ROOT_DIR
+    ART_ICON = ROOT_DIR / r'databases/DreamAtlasLogoSquare.png'
 
 AGES = ['Early Age', 'Middle Age', 'Late Age']
 
