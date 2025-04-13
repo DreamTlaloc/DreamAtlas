@@ -14,9 +14,9 @@ class MainInterface(ttk.Frame):
 
         self.grid(column=0, row=0, sticky='NEWS')
         self.columnconfigure(0, minsize=380, weight=380)
-        self.columnconfigure(1, minsize=1060, weight=1060)
+        self.columnconfigure(1, minsize=1030, weight=1030)
         self.columnconfigure(2, minsize=480, weight=480)
-        self.rowconfigure(0, minsize=1080, weight=1)
+        self.rowconfigure(0, minsize=990, weight=1)
 
         self.map = DominionsMap()
         self.settings = DreamAtlasSettings(index=0)
@@ -60,10 +60,10 @@ class MainInterface(ttk.Frame):
             major_frames[-1].grid(row=0, column=frame, sticky='NEWS')
             major_frames[-1].grid_rowconfigure(0, weight=1)
             major_frames[-1].grid_columnconfigure(0, weight=1)
-        major_frames[2].grid_rowconfigure(0, weight=860, minsize=860)
-        major_frames[2].grid_rowconfigure(1, weight=130, minsize=120)
-        major_frames[2].grid_rowconfigure(2, weight=50, minsize=80)
-        major_frames[2].grid_rowconfigure(3, weight=40, minsize=80)
+        major_frames[2].grid_rowconfigure(0, weight=700, minsize=700)
+        major_frames[2].grid_rowconfigure(1, weight=120, minsize=120)
+        major_frames[2].grid_rowconfigure(2, weight=80, minsize=80)
+        major_frames[2].grid_rowconfigure(3, weight=80, minsize=80)
 
         # Object explorer_panel lets you view and select all the objects in the map
         explorer_frame = ttk.Labelframe(major_frames[0], text="Explorer", padding=2)

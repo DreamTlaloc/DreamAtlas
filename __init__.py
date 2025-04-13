@@ -1,4 +1,5 @@
 # Importing dependencies
+import math                                 # Critical
 import os                                   # Critical
 import pathlib                              # Critical
 import struct                               # Critical

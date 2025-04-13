@@ -5,11 +5,15 @@ import networkx as ntx
 import random as rd
 from numba import njit, prange
 from numba.experimental import jitclass
-
 from DreamAtlas.databases import NEIGHBOURS_FULL
 
 
-@njit(parallel=True)
+@njit(cache=True)
+def _numba_norm(v):
+    return np.sqrt(abs(v[0]) * abs(v[0]) + abs(v[1]) * abs(v[1]))
+
+
+@njit(parallel=True, cache=True)
 def _numba_attractor_adjustment(graph: np.array,
                                 coordinates: np.array,
                                 darts: np.array,
@@ -22,15 +26,16 @@ def _numba_attractor_adjustment(graph: np.array,
     for _ in range(iterations):
         attractor_force = np.zeros((dict_size, 2), dtype=np.float64)
         for i in prange(dict_size):
-            for j in range(dict_size):
+            for j in np.argwhere(graph[i, :] == 1):
                 if attractor_array[i, j]:
+                    j = j[0]
                     attractor_force[i] += coordinates[j] + darts[i, j] * map_size - coordinates[i]
 
         net_velocity = damping_ratio * (net_velocity + attractor_force)
 
         equilibrium = 1
         for c in range(dict_size):  # Check if particles are within tolerance
-            if np.linalg.norm(net_velocity[c]) > 0.00001:
+            if _numba_norm(net_velocity[c]) > 0.00001:
                 equilibrium = 0
                 break
 
@@ -39,7 +44,6 @@ def _numba_attractor_adjustment(graph: np.array,
             for axis in range(2):
                 if not (0 <= coordinates[a, axis] < map_size[axis]):
                     dart_change = -np.sign(coordinates[a, axis])
-                    # print(dart_change, coordinates[a, axis], coordinates[a, axis] % map_size[axis])
                     coordinates[a, axis] = coordinates[a, axis] % map_size[axis] - 25 * dart_change
 
                     for b in range(dict_size):  # Iterating over all of this vertex's connections
@@ -58,7 +62,7 @@ def _numba_attractor_adjustment(graph: np.array,
     return coordinates, darts
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def _numba_spring_adjustment(graph: np.array,
                              coordinates: np.array,
                              darts: np.array,
@@ -70,23 +74,26 @@ def _numba_spring_adjustment(graph: np.array,
 
     dict_size = len(coordinates)
     damping_ratio, spring_coefficient, base_length = ratios
+    lengths = np.zeros((dict_size, dict_size), dtype=np.float32)
+
+    for i, j in connections:
+        lengths[i, j] = base_length * (weight_array[i] + weight_array[j])
 
     net_velocity = np.zeros((dict_size, 2), dtype=np.float32)
     for _ in range(iterations):
         net_spring_force = np.zeros((dict_size, 2), dtype=np.float32)
-        for i, j in connections:
-            length = base_length * (weight_array[i] + weight_array[j])
-            vector = coordinates[j] + darts[i, j] * map_size - coordinates[i]
-            unit_vector = vector / (0.0000001 + np.linalg.norm(vector))
+        for i in prange(dict_size):
+            for j in np.argwhere(graph[i, :] == 1):
+                j = j[0]
+                vector = coordinates[j] + darts[i, j] * map_size - coordinates[i]
 
-            spring_force = vector - unit_vector * length
-            net_spring_force[i] += spring_force
+                net_spring_force[i] += vector * (1 - lengths[i, j] / (0.000001 + _numba_norm(vector)))
 
         net_velocity = damping_ratio * (net_velocity + spring_coefficient * net_spring_force)
 
         equilibrium = 1
         for c in range(dict_size):  # Check if particles are within tolerance
-            if np.linalg.norm(net_velocity[c]) > 0.001:
+            if _numba_norm(net_velocity[c]) > 0.00001:
                 equilibrium = 0
                 break
 
@@ -94,12 +101,10 @@ def _numba_spring_adjustment(graph: np.array,
         for a in range(dict_size):  # Update the position
             for axis in range(2):
                 if not (0 <= coordinates[a, axis] < map_size[axis]):
-                    dart_change = -np.sign(coordinates[a, axis])
-                    coordinates[a, axis] = coordinates[a, axis] % map_size[axis]
 
                     for b in range(dict_size):  # Iterating over all of this vertex's connections
                         if graph[a, b]:
-                            new_value = darts[a, b, axis] + dart_change
+                            new_value = darts[a, b, axis] - np.sign(coordinates[a, axis])
                             if new_value < -1:
                                 new_value = 1
                             if new_value > 1:
@@ -107,13 +112,15 @@ def _numba_spring_adjustment(graph: np.array,
 
                             darts[a, b, axis] = new_value  # Setting the dart for this vertex
                             darts[b, a, axis] = -new_value  # Setting the dart for other vertex
+
+                    coordinates[a, axis] = coordinates[a, axis] % map_size[axis]
+
         if equilibrium:
             break
 
     return coordinates, darts
 
 
-# @jitclass
 class DreamAtlasGraph:
 
     def __init__(self, size, map_size, wraparound):
@@ -217,8 +224,8 @@ class DreamAtlasGraph:
                 j_angles = list()
                 if len(connections) > 0:
                     for j in connections:
+                        j = j[0]
                         if self.planes[j] in planes:
-                            j = j[0]
                             edges_set |= {(i, j), (j, i)}
                             vector = self.get_vector(i, j)
                             j_angles.append([j, np.angle(vector[0] + vector[1] * 1j, deg=True)])
@@ -390,9 +397,11 @@ class DreamAtlasGraph:
                 self.darts[i, j] = dart
                 self.darts[j, i] = -dart
 
-    def spring_adjustment(self):
-        ratios = np.array((0.1, 0.5, 30), dtype=np.float32)
-        iterations = 3 * self.size
+    def spring_adjustment(self, iterations=None, ratios=None):
+        if ratios is None:
+            ratios = np.array((0.1, 0.5, 50), dtype=np.float32)
+        if iterations is None:
+            iterations = 5 * self.size
         _coordinates, _darts = _numba_spring_adjustment(self.graph, self.coordinates.astype(dtype=np.float64),
                                                         self.darts, self.weights, self.map_size, ratios,
                                                         self.get_all_connections(), iterations)

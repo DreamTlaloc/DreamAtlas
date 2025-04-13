@@ -1,4 +1,5 @@
 from DreamAtlas import *
+from numba import njit
 
 
 def terrain_int2list(terrain_int):          # Function for separating terrain int into the components

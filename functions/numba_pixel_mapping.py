@@ -1,12 +1,13 @@
 # Imports all the DreamAtlas functionality and dependencies
-import matplotlib.pyplot as plt
-import scipy as sc
-import numpy as np
-
 from DreamAtlas import *
 
 
-@njit(parallel=True, cache=True)
+@njit(fastmath=True, cache=True)
+def minkowski(v, p, ip):
+    return (abs(v[0]) ** p + abs(v[1]) ** p) ** ip
+
+
+@njit(parallel=True, cache=True, fastmath=True)
 def _jump_flood_algorithm(pixel_matrix: np.array,
                           step_size: int,
                           shape_array: np.array,
@@ -14,8 +15,8 @@ def _jump_flood_algorithm(pixel_matrix: np.array,
                           vector_matrix: np.array,
                           hwrap: bool = True,
                           vwrap: bool = True):
-    matrix_shape = np.shape(pixel_matrix)
-    shape_x, shape_y = matrix_shape
+
+    shape_x, shape_y = np.shape(pixel_matrix)
 
     end = False
     ping_matrix = pixel_matrix
@@ -31,7 +32,7 @@ def _jump_flood_algorithm(pixel_matrix: np.array,
                               dtype=np.int32)
 
         for x in prange(shape_x):
-            for y in range(shape_y):
+            for y in prange(shape_y):
                 p = ping_matrix[x, y]
                 for n in neighbours:
 
@@ -42,16 +43,18 @@ def _jump_flood_algorithm(pixel_matrix: np.array,
                     # Main logic of the Jump Flood Algorithm (if the pixels are identical or q has no info go to next)
                     if p == q or q == 0:
                         continue
-                    q_vector = np.subtract(ping_vector_matrix[rx, ry], n)
-                    q_dist = np.linalg.norm(q_vector, ord=shape_array[q-1])
-                    if p == 0:  # if our pixel is empty, populate it with q
-                        pong_distance_matrix[x, y] = q_dist
-                        pong_vector_matrix[x, y] = q_vector
-                        pong_matrix[x, y] = q
-                    elif ping_distance_matrix[x, y] > q_dist:  # if our pixel is not empty, see if q is closer than p and if so populate it with q
-                        pong_distance_matrix[x, y] = q_dist
-                        pong_vector_matrix[x, y] = q_vector
-                        pong_matrix[x, y] = q
+                    else:
+                        q_vector = np.subtract(ping_vector_matrix[rx, ry], n)
+                        # q_dist = np.linalg.norm(q_vector, ord=shape_array[q-1])
+                        q_dist = minkowski(q_vector, shape_array[q-1, 0], shape_array[q-1, 1])
+                        if p == 0:  # if our pixel is empty, populate it with q
+                            pong_distance_matrix[x, y] = q_dist
+                            pong_vector_matrix[x, y] = q_vector
+                            pong_matrix[x, y] = q
+                        elif ping_distance_matrix[x, y] > q_dist:  # if our pixel is not empty, see if q is closer than p and if so populate it with q
+                            pong_distance_matrix[x, y] = q_dist
+                            pong_vector_matrix[x, y] = q_vector
+                            pong_matrix[x, y] = q
 
         ping_matrix = pong_matrix
         ping_distance_matrix = pong_distance_matrix
@@ -81,7 +84,7 @@ def find_pixel_ownership(coordinates_array: np.array,
     small_matrix = np.zeros((small_x_size, small_y_size), dtype=np.uint16)
     dict_size = len(coordinates_array)
 
-    shape_array = np.full(dict_size, 2, dtype=np.float32)
+    shape_array = np.full((dict_size, 2), 2, dtype=np.float32)
     s_distance_matrix = np.full((small_x_size, small_y_size), np.inf, dtype=np.float32)
     s_vector_matrix = np.zeros((small_x_size, small_y_size, 2), dtype=np.float32)
 
@@ -211,3 +214,14 @@ def pixel_matrix_2_borders_array(pixel_matrix, thickness=1):
     border_array = (down_matrix != pixel_matrix) | (left_matrix != pixel_matrix)
 
     return np.multiply(254, np.roll(border_array, shift=thickness, axis=(0, 1))).astype(dtype=np.uint8)
+
+
+@njit(parallel=True, cache=True)
+def _numba_height_map(pixel_map, height_array):
+    height_map = np.zeros(pixel_map.shape, dtype=np.int16)
+
+    for x in prange(pixel_map.shape[0]):
+        for y in prange(pixel_map.shape[1]):
+            height_map[x, y] = height_array[pixel_map[x, y]]
+
+    return height_map

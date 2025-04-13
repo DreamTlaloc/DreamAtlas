@@ -1,4 +1,5 @@
 from DreamAtlas import *
+from DreamAtlas.functions.numba_pixel_mapping import _numba_height_map
 
 
 def generator_dreamatlas(settings: type(DreamAtlasSettings),
@@ -48,8 +49,8 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
 
     map_class.map_size[1:3] = np.outer(np.sqrt(pixels), np.asarray([1, 0.588])).round(decimals=-2).astype(dtype=np.uint32)
     map_class.wraparound = NEIGHBOURS[settings.wraparound]
-    map_class.scale[1] = map_class.map_size[1] * np.asarray([0.03, 0.03])
-    map_class.scale[2] = map_class.map_size[2] * np.asarray([0.02, 0.02])
+    map_class.scale[1] = min(map_class.map_size[1]) * np.asarray([0.035])
+    map_class.scale[2] = min(map_class.map_size[2]) * np.asarray([0.03])
     map_class.planes = [1, 2]
     layout = DominionsLayout(map_class)
     layout.generate_region_layout(settings=map_class.settings, map_size=map_class.map_size[1], nation_list=nation_list, seed=map_class.seed)
@@ -156,12 +157,12 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
     for plane in map_class.planes:
         shapes = dict()
         for province in province_list[plane]:
-            shapes[province.index] = province.shape
+            shapes[province.index] = [province.shape, 1 / province.shape]
 
         map_class.pixel_map[plane] = find_pixel_ownership(layout.province_graphs[plane].coordinates, map_class.map_size[plane], shapes, hwrap=True, vwrap=True, scale_down=8)
-        map_class.pixel_owner_list[plane] = pb_pixel_allocation(map_class.pixel_map[plane])
+        map_class.pixel_owner_list[plane] = fast_matrix_2_pb(map_class.pixel_map[plane])
 
-        height_dict = dict()
+        height_array = np.zeros(len(province_list[plane])+1, dtype=np.int16)
         for province in map_class.province_list[plane]:
             height = 20
             if has_terrain(province.terrain_int, 4):
@@ -170,8 +171,9 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
                 height = -100
             if has_terrain(province.terrain_int, 68719476736):  # testing cave wall rendering hypothesis
                 height = -100
-            height_dict[province.index] = height
-        map_class.height_map[plane] = np.vectorize(lambda i: height_dict[i])(map_class.pixel_map[plane])
+            height_array[province.index] = height
+
+        map_class.height_map[plane] = _numba_height_map(map_class.pixel_map[plane], height_array)
 
     map_class.ygg_desc = 'example desc'
     map_class.ygg_emoji = ':earth_africa:'

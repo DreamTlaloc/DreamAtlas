@@ -1,3 +1,5 @@
+import matplotlib.pyplot as plt
+
 from . import *
 
 
@@ -43,7 +45,7 @@ class DominionsLayout:
 
         homeland_region_num = len(nation_list)
         periphery_region_num = int(0.5 * settings.player_neighbours * homeland_region_num)
-        blockers = 5 * (settings.cave_region_num + ug_starts) + 20
+        blockers = 5 * (settings.cave_region_num + ug_starts) + 50
         num_regions = homeland_region_num + periphery_region_num + settings.throne_region_num + settings.water_region_num + settings.cave_region_num + settings.vast_region_num + blockers
 
         self.region_graph = DreamAtlasGraph(size=num_regions, map_size=map_size, wraparound=self.wraparound)
@@ -142,7 +144,8 @@ class DominionsLayout:
                     r += 1
 
         # Add Blocker regions - mountain blocker regions go into non-triangular surface faces then cave walls between cave regions
-        faces, centroids = self.region_graph.get_faces_centroids(planes=[1])
+        # faces, centroids = self.region_graph.get_faces_centroids(planes=[1])
+        faces = set()
         for i, face in enumerate(faces):
             if len(face) > 3:
                 self.region_graph.insert_face(face, r, centroids[i])
@@ -263,31 +266,25 @@ class DominionsLayout:
 
     def plot(self):
 
-        fig_regions, axs_regions = plt.subplots(3, 1)
-        axs_regions[0].remove()
-        axs_regions[0] = fig_regions.add_subplot(3, 1, 1, projection='3d')
+        fix_reg, ax_reg = plt.subplots()
 
         # Plot regions
         virtual_graph, virtual_coordinates = self.region_graph.get_virtual_graph()
 
         for i, (x, y) in enumerate(virtual_coordinates):  # region connections
             if i in self.region_types:
-                for j in self.region_graph.get_node_connections(i):
-                    x2, y2 = virtual_coordinates[j[0]]
-                    edge_col = 'k--'
-                    if self.region_planes[i] == self.region_planes[j[0]]:
-                        axs_regions[self.region_graph.planes[i]].plot([x, x2], [y, y2], 'k-')
-                        edge_col = 'k-'
-                    axs_regions[0].plot([x, x2], [y, y2], [100-self.region_graph.planes[i]*100, 100-self.region_graph.planes[j[0]]*100], edge_col)
+                for j in np.argwhere(virtual_graph[i, :] == 1):
+                    j = j[0]
+                    x2, y2 = virtual_coordinates[j]
+                    ax_reg.plot([x, x2], [y, y2], 'k-')
 
         region_colours = ['g*', 'rD', 'y^', 'bo', 'rv', 'ms', 'kX', 'kX', 'kX']
         for i, (x, y) in enumerate(virtual_coordinates):  # region connections
             if i in self.region_types:
-                axs_regions[0].plot(x, y, 100-self.region_graph.planes[i]*100, region_colours[self.region_types[i]])
-                axs_regions[self.region_graph.planes[i]].plot(x, y, region_colours[self.region_types[i]])
-                axs_regions[self.region_graph.planes[i]].text(x, y, str(i))
+                ax_reg.plot(x, y, region_colours[self.region_types[i]])
+                ax_reg.text(x, y, str(i))
 
-        # axs_regions.set(xlim=(0, self.map_size[1][0]), ylim=(0, self.map_size[1][1]))
+        ax_reg.set(xlim=(0, self.map_size[1][0]), ylim=(0, self.map_size[1][1]))
 
         # # Plot provinces
         # for i, plane in enumerate(self.map.planes):

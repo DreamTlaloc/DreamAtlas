@@ -409,6 +409,7 @@ class DominionsMap:
                 f.write('#scenario\n')
             if self.dom_version is not None:
                 f.write('#domversion %s\n' % self.dom_version)
+            f.write('#mapnohide\n')
             f.write('#maptextcol ' + ' '.join(map(str, self.map_text_colour)) + '\n')
             f.write('#mapdomcol ' + ' '.join(map(str, self.map_dom_colour)) + '\n')
             if plane == 2:
@@ -502,7 +503,7 @@ class DominionsMap:
             f.write('$ygg_desc ' + ' '.join(map(str, self.ygg_desc)) + '\n')
             f.write('$ygg_emoji ' + ' '.join(map(str, self.ygg_desc)) + '\n')
 
-            f.write('\n--Version 1.1.4\n')
+            f.write('\n--Version 1.1.6\n')
             if self.settings is not None:
                 for attribute in self.settings.__dict__:
                     f.write('$%s %s\n' % (attribute, self.settings.__dict__[attribute]))
