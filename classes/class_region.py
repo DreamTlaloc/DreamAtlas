@@ -312,7 +312,7 @@ class VastRegion(Region):
 
         for i in range(self.region_size):  # Apply the terrain and land/sea/cave tags to each province
             province = self.provinces[i]
-            province.terrain_int = self.terrain + 8589934592
+            province.terrain_int = self.terrain + 8589934592 + 134217728
 
     def generate_population(self, seed: int = None):
 
@@ -349,7 +349,7 @@ class BlockerRegion(Region):
             province.population = 0
 
 
-class PatalaRegion(Region):  # Grumble...grumble...hardcoded bs
+class KarstRegion(Region):  # Grumble...grumble...hardcoded bs
 
     def __init__(self, index: int, nation: Nation, settings: DreamAtlasSettings, seed: int = None):
         super().__init__(index, settings, seed)
@@ -360,69 +360,37 @@ class PatalaRegion(Region):  # Grumble...grumble...hardcoded bs
         self.terrain = nation.terrain
         self.plane = nation.home_plane
         self.region_size = self.settings.homeland_size
-        self.anchor_connections = self.settings.cap_connections
+        self.anchor_connections = self.settings.cap_connections - 1
         self.name = nation.name
 
     def generate_graph(self, seed: int = None):
         dibber(self, seed)
         self.provinces = list()
 
+        planes = [int(digit) for digit in str(self.plane)]
         spread_range = np.pi / self.anchor_connections
-        theta = np.linspace(0, 2*np.pi, self.anchor_connections, endpoint=False)
+        base_rotation = np.random.uniform(0, np.pi)
+        theta = np.linspace(0, 2*np.pi, self.anchor_connections, endpoint=False) + np.random.uniform(base_rotation, base_rotation + spread_range, self.anchor_connections)
 
         for i in range(self.region_size):
-            province = Province(index=i, parent_region=self, plane=self.plane)
+
+            plane = planes[1]
+            if i < self.anchor_connections:
+                plane = planes[0]
+            province = Province(index=i, parent_region=self, plane=plane)
 
             if i == 0:  # Generating the anchor province
                 province.coordinates = [0, 0]
-                province.capital_location = True
-                if type(self.nation) is not GenericNation:
-                    province.special_capital = self.nation.index
 
             elif i <= self.anchor_connections:  # Generate the anchor connections, rotating randomly, then adding some small random angle/radius change
                 province.coordinates = np.asarray([np.cos(theta[i-1]), np.sin(theta[i-1])])
 
+            elif i == self.anchor_connections:  # Generate the first ug connection
+                province.coordinates = [0, 0]
+
             else:  # Place the remaining extra provinces attached to non-anchor provinces
                 j = rd.choice(range(1, 1 + self.anchor_connections))
-                j_coordinates = self.provinces[j].coordinates
                 phi = theta[j-1] + np.random.uniform(0, 0.5*spread_range)
-                province.coordinates = j_coordinates + np.random.uniform(0.85, 1.15) * np.asarray([np.cos(phi), np.sin(phi)])
+                province.coordinates = np.asarray([np.cos(phi), np.sin(phi)])
 
             self.provinces.append(province)
-
-        for i in range(3):
-
-            self.provinces.append(province)
-
-    def generate_terrain(self, seed: int = None):  # This is the basic generate terrain, specific region types differ
-        dibber(self, seed)
-
-        terrain_picks = rd.choices(TERRAIN_PREF_BITS, weights=self.terrain_pref, k=self.region_size)  # Pick a selection of primary terrains for this region
-
-        for i in range(self.region_size):  # Apply the terrain and land/sea/cave tags to each province
-
-            province = self.provinces[i]
-            terrain_set = {0, 512, 134217728}  # Plains, No Start, Bad Throne Location
-
-            if province.plane == 2:
-                terrain_set.add(4096)  # Cave layer
-
-            if i == 0:  # Anchor province
-                terrain_set.remove(512)  # Remove no start
-                terrain_set.add(67108864)  # Good start location
-                for terrain in terrain_int2list(self.terrain):
-                    terrain_set.add(terrain)  # Capital terrain
-
-            elif i <= self.anchor_connections:  # Circle provinces
-                terrain_set.add(terrain_picks[i])
-                if i > self.layout[1] * self.anchor_connections:  # Circle sea/land split
-                    terrain_set.add(4)  # Sea
-
-            else:  # Extra provinces
-                terrain_set.add(terrain_picks[i])
-                if rd.random() > self.layout[2]:  # land/sea
-                    terrain_set.add(4)  # Sea
-                    if 32 in terrain_set or 64 in terrain_set or 256 in terrain_set:
-                        terrain_set.remove(terrain_picks[i])
-
-            province.terrain_int = sum(terrain_set)

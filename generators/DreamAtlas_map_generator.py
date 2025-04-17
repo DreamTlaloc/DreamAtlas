@@ -160,7 +160,7 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
             shapes[province.index] = [province.shape, 1 / province.shape]
 
         map_class.pixel_map[plane] = find_pixel_ownership(layout.province_graphs[plane].coordinates, map_class.map_size[plane], shapes, hwrap=True, vwrap=True, scale_down=8)
-        map_class.pixel_owner_list[plane] = fast_matrix_2_pb(map_class.pixel_map[plane])
+        map_class.pixel_owner_list[plane] = pb_pixel_allocation(map_class.pixel_map[plane])
 
         height_array = np.zeros(len(province_list[plane])+1, dtype=np.int16)
         for province in map_class.province_list[plane]:

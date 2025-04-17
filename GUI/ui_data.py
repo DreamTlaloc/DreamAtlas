@@ -106,7 +106,7 @@ UI_CONFIG_SETTINGS = {
         'site_frequency': [int, 2, 'Site Frequency', [40, 100], 1, 'Select the frequency of magic sites on the map'],
         'cap_connections': [int, 2, 'Capital Connections', [4, 8], 1, 'Select the number of provinces in each cap circle (must be less than the size of the homeland)'],
         'player_neighbours': [int, 2, 'Player Neighbours', [3, 6], 1, 'Select the number of neighbours for each player'],
-        'homeland_size': [int, 2, 'Homeland Size', [4, 12], 1, 'Select the size of the homeland regions\nThese are the regions around each players capital'],
+        'homeland_size': [int, 2, 'Homeland Size', [6, 12], 1, 'Select the size of the homeland regions\nThese are the regions around each players capital'],
         'periphery_size': [int, 2, 'Periphery Size', [1, 8], 1, 'Select the size of the periphery regions\nThese are the regions connecting different players'],
         'throne_region_num': [int, 2, 'Thrones', [1, 32], 1, 'Select the number of thrones'],
         'water_region_num': [int, 2, 'Water Regions', [0, 30], 1, 'Select the number of water regions'],

@@ -1,3 +1,5 @@
+import numpy as np
+
 from DreamAtlas import *
 
 
@@ -10,21 +12,47 @@ def _numba_init_height_map(height_map, height_list):
     return height_map
 
 
-
 # @njit(parallel=True, fastmath=True)
-def _numba_fill_depressions(height_map, iterations=100):
+def _numba_flow_map(height_map, min_seeds, iterations=1000):
 
-    flow_map = np.ones(height_map.shape, dtype=np.float32)
-    flow_map *= 300
+    ping_filled_map = np.zeros(height_map.shape, dtype=np.float32)
+    ping_filled_map *= 300
+    pong_filled_map = np.zeros(height_map.shape, dtype=np.float32)
+
+    flow_map = np.zeros((height_map.shape[0], height_map.shape[1], 2), dtype=np.int32)
+
+    for h, x, y, in min_seeds:
+        ping_filled_map[x, y] = height_map[x, y]
+
+    neighbours = np.array([[1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [0, -1], [-1, -1], [-1, 0]], dtype=np.int32)
 
     # Fill all the depressions
     for _ in range(iterations):
         for x in prange(height_map.shape[0]):
             for y in prange(height_map.shape[1]):
+                lowest = np.inf
+                for n in neighbours:
+                    x_n = x + n[0]
+                    y_n = y + n[1]
 
+                    x_v = x_n % height_map.shape[0]
+                    y_v = y_n % height_map.shape[1]
 
+                    if ping_filled_map[x, y] > ping_filled_map[x_v, y_v] and ping_filled_map[x_v, y_v] < lowest:
+                        lowest = ping_filled_map[x_v, y_v]
+                        flow = n
 
-    return flow_map
+                if lowest == np.inf:
+                    continue
+
+                pong_filled_map[x, y] = max(height_map[x, y], lowest)
+                flow_map[x, y] = flow
+
+        if np.sum(ping_filled_map - pong_filled_map) < 0.1:
+            break
+        pong_filled_map = ping_filled_map
+
+    return flow_map, pong_filled_map
 
 
 def generator_geography(map_class, seed=None):
@@ -44,8 +72,8 @@ def generator_geography(map_class, seed=None):
 
         # Add noise
 
-        # Fill the depressions in the height map
-        flow_map = _numba_fill_depressions(height_map, iterations=100)
+        # Find the flow map
+        flow_map, filled_map = _numba_flow_map(height_map, min_seeds, iterations=1000)
 
         height_maps[plane] = height_map
         pixel_maps[plane] = find_pixel_ownership(map_class.layout.province_graphs[plane].coordinates, map_class.map_size[plane], shapes, hwrap=True, vwrap=True, scale_down=8)
