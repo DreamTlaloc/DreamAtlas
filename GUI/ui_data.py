@@ -62,7 +62,7 @@ UI_CONFIG_PROVINCE = {
 
         'terrain_int': [int, 7, 'Terrain', None, 1, 'Select the terrain type for the province'],
 
-        'capital_location': [int, 3, 'Capital Location Start', None, 0, 'Enter the starting location for the capital'],
+        'capital_location': [int, 3, 'Good start', None, 0, 'Enter the starting location for the capital'],
         'killfeatures': [int, 3, 'No features', None, 0, 'Select if the province has no features'],
         'temple': [int, 3, 'Temple', None, 0, 'Select if the province has a temple'],
         'lab': [int, 3, 'Lab', None, 0, 'Select if the province has a lab'],

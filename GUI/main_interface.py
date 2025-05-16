@@ -13,10 +13,8 @@ class MainInterface(ttk.Frame):
         super().__init__()
 
         self.grid(column=0, row=0, sticky='NEWS')
-        self.columnconfigure(0, minsize=380, weight=380)
-        self.columnconfigure(1, minsize=1030, weight=1030)
-        self.columnconfigure(2, minsize=480, weight=480)
-        self.rowconfigure(0, minsize=990, weight=1)
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(0, weight=1)
 
         self.map = DominionsMap()
         self.settings = DreamAtlasSettings(index=0)
@@ -52,18 +50,23 @@ class MainInterface(ttk.Frame):
     def build_gui(self):  # This builds the high level widgets for the UI that are never removed
 
         # WIDGET FUNCTIONS
-
         # BUILD UI
+        major_pane = ttk.PanedWindow(self, orient=ttk.HORIZONTAL)
+        major_pane.grid(row=0, column=0, sticky='NEWS')
+        # major_pane.grid_rowconfigure(0, weight=1)
+        # major_pane.grid_columnconfigure(0, weight=1)
+
         major_frames = list()  # Build 3 major frames
+        weights = [280, 1090, 520]
         for frame in range(3):
-            major_frames.append(ttk.Frame(self, padding=4))
-            major_frames[-1].grid(row=0, column=frame, sticky='NEWS')
+            major_frames.append(ttk.Frame(major_pane, padding=4))
+            major_pane.add(major_frames[-1], weight=weights[frame])
             major_frames[-1].grid_rowconfigure(0, weight=1)
             major_frames[-1].grid_columnconfigure(0, weight=1)
-        major_frames[2].grid_rowconfigure(0, weight=700, minsize=700)
-        major_frames[2].grid_rowconfigure(1, weight=120, minsize=120)
-        major_frames[2].grid_rowconfigure(2, weight=80, minsize=80)
-        major_frames[2].grid_rowconfigure(3, weight=80, minsize=80)
+        major_frames[2].grid_rowconfigure(0, weight=900)
+        major_frames[2].grid_rowconfigure(1, weight=120)
+        major_frames[2].grid_rowconfigure(2, weight=80)
+        major_frames[2].grid_rowconfigure(3, weight=80)
 
         # Object explorer_panel lets you view and select all the objects in the map
         explorer_frame = ttk.Labelframe(major_frames[0], text="Explorer", padding=2)
@@ -216,6 +219,9 @@ class MainInterface(ttk.Frame):
 
     def update_viewing_panel(self):  # This is run whenever the screen needs get updated
 
+        for i in self.viewing_canvas.winfo_children():
+            i.destroy()
+
         # Need to premake the map layers and set to hidden only using when needed, also draw virtual maps at the other positions and teleport back around when you get to one edge
         if not self.empty:  # If there is data
 
@@ -280,14 +286,18 @@ class MainInterface(ttk.Frame):
                     done_nodes.add(i)
 
     def update_editor_panel(self):
+
+        for i in self.editor_frame.winfo_children():
+            i.destroy()
+
         if not self.empty:  # If there is data
             if self.focus is not None:  # If there is a focus
                 if self.editor_focus is not None:
                     self.editor_focus.destroy()
                 if type(self.focus) is Province:
-                    self.editor_focus = InputWidget(master=self.editor_frame, ui_config=UI_CONFIG_PROVINCE, cols=1, target_class=self.focus)
+                    self.editor_focus = InputWidget(master=self.editor_frame, ui_config=UI_CONFIG_PROVINCE, target_class=self.focus)
                 if type(self.focus) is Connection:
-                    self.editor_focus = InputWidget(master=self.editor_frame, ui_config=UI_CONFIG_CONNECTION, cols=1, target_class=self.focus)
+                    self.editor_focus = InputWidget(master=self.editor_frame, ui_config=UI_CONFIG_CONNECTION, target_class=self.focus)
                 self.editor_focus.class_2_input()
                 self.editor_focus.grid(row=0, column=0, sticky="NEWS")
 
@@ -352,15 +362,14 @@ class MainInterface(ttk.Frame):
 
         init_settings = DreamAtlasSettings(0)
         init_settings.load_file(ROOT_DIR / 'databases/12_player_ea_test.dream')
-        InputToplevel(master=self, title='Generate DreamAtlas Map', ui_config=UI_CONFIG_SETTINGS, cols=3, target_class=init_settings, map=self.map)
+        InputToplevel(master=self, title='Generate DreamAtlas Map', ui_config=UI_CONFIG_SETTINGS, target_class=init_settings, map=self.map)
 
     def load_map(self, folder):
-
-        self.map.load_folder(folder)
-        self.update_gui()
+        if folder != '':
+            self.map.load_folder(folder)
+            self.update_gui()
 
     def load_file(self, file):
-
         self.map.load_file(file)
         self.update_gui()
 
@@ -371,6 +380,9 @@ class MainInterface(ttk.Frame):
 def run_interface():
     app = ttk.Window(title="DreamAtlas", themename='dreamfantasy', iconphoto=ART_ICON)
     app.place_window_center()
+    app.rowconfigure(0, weight=1)
+    app.columnconfigure(0, weight=1)
+    app.state('zoomed')
 
     def _config():
         x = 1
