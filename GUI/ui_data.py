@@ -5,7 +5,7 @@ UI_CONFIG_CONNECTION = {
     'label_frames': [['Connection', ['connected_provinces', 'connection_int']]],
     'buttons': [0, 5],
     'attributes': {
-        'connected_provinces': [tuple[int, int], 0, 'Connected Provinces', None, 1, 'Enter the IDs of connected provinces'],
+        'connected_provinces': [tuple[int, int], 0, 'Connected Provinces', None, 0, 'Enter the IDs of connected provinces'],
         'connection_int': [int, 6, 'Connection Type', None, 1, 'Select the type of connection between provinces']
     }
 }
@@ -46,31 +46,30 @@ UI_CONFIG_GENERICNATION = {
 
 UI_CONFIG_PROVINCE = {
     'label_frames': [
-        ['Province info', ['index', 'name', 'plane', 'parent_region', 'unrest', 'population', 'defence']],
+        ['Province info', ['index', 'name', 'unrest', 'population']],
         ['Terrain', ['terrain_int']],
         ['Province info', ['poptype', 'fort']],
-        ['Province attributes', ['capital_location', 'killfeatures', 'temple', 'lab']]],
+        ['Province attributes', ['killfeatures', 'temple', 'lab']]],
     'buttons': [0, 5],
     'attributes': {
-        'index': [int, 0, 'Province Number', None, 1, 'Enter the unique number for the province'],
+        'index': [int, 0, 'Province Number', None, 0, 'Enter the unique number for the province'],
         'name': [str, 0, 'Province Name', None, 1, 'Enter the name of the province'],
-        'plane': [int, 0, 'Plane', None, 0, 'Enter the plane ID where the province is located'],
-        'parent_region': [int, 0, 'Parent Region', None, 0, 'Enter the ID of the parent region'],
-        'unrest': [int, 0, 'Unrest', None, 0, 'Enter the level of unrest in the province'],
+        # 'plane': [int, 0, 'Plane', None, 1, 'Enter the plane ID where the province is located'],
+        # 'parent_region': [int, 0, 'Parent Region', None, 1, 'Enter the ID of the parent region'],
+        'unrest': [int, 0, 'Unrest', None, 1, 'Enter the level of unrest in the province'],
         'population': [int, 0, 'Population', None, 1, 'Enter the population of the province'],
-        'defence': [int, 0, 'Defence', None, 0, 'Enter the defence level of the province'],
 
         'terrain_int': [int, 7, 'Terrain', None, 1, 'Select the terrain type for the province'],
 
-        'capital_location': [int, 3, 'Capital Location Start', None, 0, 'Enter the starting location for the capital'],
-        'killfeatures': [int, 3, 'No features', None, 0, 'Select if the province has no features'],
-        'temple': [int, 3, 'Temple', None, 0, 'Select if the province has a temple'],
-        'lab': [int, 3, 'Lab', None, 0, 'Select if the province has a lab'],
+        # 'capital_location': [int, 3, 'Good start', None, 1, 'Enter the starting location for the capital'],
+        'killfeatures'    : [int, 3, 'No features', None, 1, 'Select if the province has no features'],
+        'temple'          : [int, 3, 'Temple', None, 1, 'Select if the province has a temple'],
+        'lab'             : [int, 3, 'Lab', None, 1, 'Select if the province has a lab'],
 
-        'poptype'       : [int, 6, 'Poptype', ['Pops go here'], 0, 'Select the population type for the province'],
-        # 'owner'         : [int, 6, 'Owner', ['Owners go here'], 0, 'Select the owner of the province'],
-        # 'capital_nation': [int, 6, 'Nation Start', ['Natstart go here'], 0, 'Select the starting nation for the province'],
-        'fort'          : [int, 6, 'Fort', ['Fort go here'], 0, 'Select the fort type for the province']
+        'poptype'       : [int, 6, 'Poptype', ['Pops go here'], 1, 'Select the population type for the province'],
+        # 'owner'         : [int, 6, 'Owner', ['Owners go here'], 1, 'Select the owner of the province'],
+        # 'capital_nation': [int, 6, 'Nation Start', ['Natstart go here'], 1, 'Select the starting nation for the province'],
+        'fort'          : [int, 6, 'Fort', ['Fort go here'], 1, 'Select the fort type for the province']
     }
 }
 
@@ -85,20 +84,18 @@ UI_CONFIG_REGION = [
 UI_CONFIG_SETTINGS = {
     'label_frames': [
         ['Map Info', ['map_title', 'seed']],
-        ['General Settings', ['art_style', 'wraparound', 'pop_balancing', 'site_frequency', 'cap_connections', 'player_neighbours']],
+        ['General Settings', ['art_style', 'pop_balancing', 'site_frequency', 'cap_connections', 'player_neighbours']],
         ['Region Settings', ['homeland_size', 'periphery_size', 'throne_region_num', 'water_region_num', 'cave_region_num', 'vast_region_num', 'water_region_type', 'cave_region_type']],
         ['Additional Options', ['disciples', 'omniscience']],
         ['Nations & Teams', ['vanilla_nations']],
         ['Generic/Custom Nations', ['custom_nations']],
         ['Estimates', ['generation_info']]],
-    'buttons': [2, 3, 4, 5, 6],
+    'buttons': [2, 3, 4, 6],
     'attributes': {
         'map_title': [str, 0, 'Map Title', None, 1, 'Enter the title of the map'],
         'seed': [int, 0, 'Seed', None, 1, 'Enter the random seed for map generation'],
-        # 'description': [str, 0, 'Description', None, 1, 'Enter a description for the map'],
 
         'art_style': [int, 1, 'Art Style', ['.d6m'], 1, 'Select the art style for the map'],
-        'wraparound': [int, 1, 'Wraparound', ['None', 'Horizontal', 'Vertical', 'Full'], 1, 'Select the wraparound type for the map'],
         'pop_balancing': [int, 1, 'Balance', ['Vanilla', 'DreamAtlas'], 1, 'Select the balancing method\nVanilla - No balancing\nDreamAtlas (recommended) - Fair population and terrain balance'],
         'cave_region_type': [int, 1, 'Cave Type', ['None', 'Grottos', 'Tunnels', 'Caverns'], 1, 'Select the type of cave regions\nNone - No cave regions\nGrottos - 1 province per region\nTunnels - 3 provinces per region\nCaverns - 6 provinces per region'],
         'water_region_type': [int, 1, 'Water Type', ['None', 'Lakes', 'Seas', 'Oceans'], 1, 'Select the type of water regions\nNone - No water regions\nLakes - 1 province per region\nSeas - 3 provinces per region\nOceans - 5 provinces per region'],
@@ -113,7 +110,7 @@ UI_CONFIG_SETTINGS = {
         'cave_region_num': [int, 2, 'Cave Regions', [0, 30], 1, 'Select the number of cave regions'],
         'vast_region_num': [int, 2, 'Vast Regions', [0, 30], 1, 'Select the number of vast regions\nThese regions are empty and uncontrollable but can be traversed'],
 
-        'disciples': [int, 3, 'Disciples', None, 0, 'Toggle disciples mode'],
+        'disciples': [int, 3, 'Disciples', None, 1, 'Toggle disciples mode'],
         'omniscience': [int, 3, 'Omniscience', None, 1, 'Toggle creating a hidden omniscience start'],
 
         'vanilla_nations': [list, 4, 'Nations & Teams', None, 1, 'Select the vanilla nations and teams\nOnly nations from the selected age will be used'],
@@ -134,5 +131,15 @@ EXPLORER_REGIONS = ["Homelands", "Peripheries", "Thrones", "Water", "Caves", "Va
 
 TOOLTIP_DELAY = 500
 
+DISPLAY_OPTIONS = ['Show Nodes', 'Show Connections', 'Show Borders', 'Show Capitals', 'Show Thrones', 'Terrain Icons']
+DISPLAY_TAGS = ['nodes', 'connections', 'borders', 'capitals', 'thrones', 'info']
+DISPLAY_STATES = [1, 1, 1, 1, 1, 1]
+DISPLAY_STYLES = ['primary', 'primary', 'primary', 'primary', 'primary', 'primary']
+
+LENSE_KEY = {'z': 0, 'x': 1, 'c': 2, 'v': 3, 'b': 4, 'n': 5}
+
+CONNECTION_COLOURS = {0: 'yellow', 33: 'red', 2: 'blue', 4: '#808080', 8: 'green', 16: 'cyan', 36: '#808080'}
+
+INPUT_ENTRY_SIZE = 275
 UI_STATES = (ttk.DISABLED, ttk.NORMAL, ttk.HIDDEN)
 UI_CONNECTION_COLOURS = {0: 'black', 33: 'red', 2: 'blue', 4: 'grey', 8: 'green', 16: 'brown', 36: 'red', 3: 'pink'}  # [0, 'Standard border'], [33, 'Mountain pass'], [2, 'River border'], [4, 'Impassable'], [8, 'Road'], [16, 'River bridge'], [36, 'Impassable mountain'], [3, 'Waterfalls']

@@ -121,5 +121,5 @@ FORT = [
 
 SPECIAL_NEIGHBOUR = [
     [0, 'Standard border'], [33, 'Mountain pass'], [2, 'River border'], [4, 'Impassable'], [8, 'Road'],
-    [16, 'River bridge'], [36, 'Impassable mountain'], [3, 'Waterfalls']
+    [16, 'River bridge'], [36, 'Impassable mountain']
 ]

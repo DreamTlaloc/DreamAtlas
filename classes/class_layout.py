@@ -20,8 +20,7 @@ class DominionsLayout:
         # Province level layout - list per plane
         self.province_graphs = [None for _ in range(10)]
         self.edge_types = [list() for _ in range(10)]
-        self.neighbours = [list() for _ in range(10)]
-        self.special_neighbours = [list() for _ in range(10)]
+        self.connections = [list() for _ in range(10)]
         self.gates = [list() for _ in range(10)]
         self.min_dist = [np.inf for _ in range(10)]
 
@@ -70,12 +69,8 @@ class DominionsLayout:
 
         self.region_graph.embed_graph(initial_graph, seed)
         self.region_graph.spring_adjustment()
-
-        # homeland_coords = self.region_graph.coordinates[0:len(nation_list)]
-        # codebook, distortion = sccvq.kmeans(obs=np.array(homeland_coords, dtype=np.float32), k_or_guess=len(teams))
-        # code, distortion = sccvq.vq(homeland_coords, codebook)
-        # print(code)
-        # for j in code:
+        if settings.disciples:
+            self.region_graph.embed_disciples(teams, seed)  # Embed disciples into the graph
 
         # Add Peripheral regions
         done_edges = set()
@@ -154,25 +149,33 @@ class DominionsLayout:
                 self.region_types[r] = 6
                 r += 1
 
-        self.region_graph.make_delaunay_graph(planes=[2])  # Adding cave walls
-        faces, centroids = self.region_graph.get_faces_centroids(planes=[2])
-        for i, j in self.region_graph.get_all_connections():
-            if self.region_planes[i] == 2 and self.region_planes[j] == 2:
-                self.region_graph.insert_connection(i, j, r)
-                self.region_planes[r] = 2
-                self.region_graph.planes[r] = self.region_planes[r]
-                self.region_types[r] = 8
-                r += 1
+        self.region_graph.spring_adjustment()
+        edges, coordinates, darts = self.region_graph.get_small_delaunay(planes=[2])
+        for i, edge in enumerate(edges):
+            self.region_graph.graph[edge[0], edge[1]] = 0
+            self.region_graph.graph[edge[1], edge[0]] = 0
+            self.region_graph.graph[edge[0], r] = 1
+            self.region_graph.graph[edge[1], r] = 1
+            self.region_graph.graph[r, edge[1]] = 1
+            self.region_graph.graph[r, edge[0]] = 1
+            self.region_graph.coordinates[r] = coordinates[i]
+            self.region_graph.darts[edge[0], r] = -darts[i][0]
+            self.region_graph.darts[edge[1], r] = -darts[i][1]
+            self.region_graph.darts[r, edge[1]] = darts[i][1]
+            self.region_graph.darts[r, edge[0]] = darts[i][0]
 
+            self.region_planes[r] = 2
+            self.region_graph.planes[r] = self.region_planes[r]
+            self.region_types[r] = 8
+            r += 1
+
+        faces, centroids = self.region_graph.get_faces_centroids(planes=[2])
         for i, face in enumerate(faces):
             self.region_graph.insert_face(face, r, centroids[i])
             self.region_planes[r] = 2
             self.region_graph.planes[r] = self.region_planes[r]
             self.region_types[r] = 8
             r += 1
-
-        # Final Adjustment
-        self.region_graph.spring_adjustment()
 
     def generate_province_layout(self,
                                  province_list,
@@ -183,55 +186,56 @@ class DominionsLayout:
         self.province_graphs[plane] = DreamAtlasGraph(len(province_list), map_size=self.map_size[plane], wraparound=self.wraparound)
         for i, province in enumerate(province_list):
             self.province_graphs[plane].coordinates[i] = province.coordinates
+
+            if province.capital_location or province.capital_circle:
+                self.province_graphs[plane].types[i] = 1
             # self.province_graphs[plane].weights[i] = province.size
 
         self.province_graphs[plane].make_delaunay_graph()
         self.province_graphs[plane].spring_adjustment()
+        self.province_graphs[plane].clean_delaunay_graph()  # Clean the graph with swaps for non-cap provinces
 
-    def generate_neighbours(self, plane: int):
-
-        self.neighbours[plane] = list()
-        done_edges = set()
-        for i, j in self.province_graphs[plane].get_all_connections():
-            if (j, i) not in done_edges:
-                done_edges.add((i, j))
-                self.neighbours[plane].append([i+1, j+1])
-        self.min_dist[plane] = self.province_graphs[plane].get_min_dist()
-
-    def generate_special_neighbours(self,
+    def generate_connections(self,
                                     plane: int,
                                     seed: int = None):
         dibber(self, seed)  # Setting random seed
 
-        if not self.neighbours[plane]:
-            raise Exception('No neighbours')
-        self.special_neighbours[plane] = list()
         index_2_prov = dict()
         for province in self.map.province_list[plane]:
             index_2_prov[province.index] = province
 
-        for i, j in self.neighbours[plane]:  # Randomly assigns special connections
-            i_j_provs = [index_2_prov[i], index_2_prov[j]]
-            choice = int(rd.choices(SPECIAL_NEIGHBOUR, NEIGHBOUR_SPECIAL_WEIGHTS)[0][0])
-            fail = False
-            for index in range(2):
-                ti = i_j_provs[index].terrain_int
-                if i_j_provs[index].capital_location:  # Ignore caps
-                    fail = True
-                elif has_terrain(ti, 68719476736):  # if cave wall
-                    self.special_neighbours[plane].append([i, j, 4])
-                    fail = True
-                elif self.region_types[i_j_provs[index].parent_region.index] == 6:  # if blocker
-                    self.special_neighbours[plane].append([i, j, 36])
-                    fail = True
-                elif has_terrain(ti, 4):
-                    fail = True
-                elif has_terrain(ti, 4096):
-                    fail = True
-                elif (choice == 33 or choice == 36) and not has_terrain(ti, 8388608):
-                    i_j_provs[index].terrain_int += 8388608
-            if not fail and choice != 0:
-                self.special_neighbours[plane].append([i, j, choice])
+        self.connections[plane] = list()
+        done_edges = set()
+        for i, j in self.province_graphs[plane].get_all_connections():
+            if (j, i) not in done_edges:
+                done_edges.add((i, j))
+
+                for province in [index_2_prov[i+1], index_2_prov[j+1]]:
+                    choice = int(rd.choices(SPECIAL_NEIGHBOUR, NEIGHBOUR_SPECIAL_WEIGHTS)[0][0])
+                    terrain = province.terrain_int
+                    if province.capital_location:  # Ignore caps
+                        choice = 0
+                        break
+                    elif has_terrain(terrain, 68719476736):  # if cave wall
+                        choice = 4
+                        break
+                    elif self.region_types[province.parent_region.index] == 6:  # if blocker
+                        choice = 36
+                        break
+                    elif has_terrain(terrain, 4):
+                        choice = 0
+                        break
+                    elif has_terrain(terrain, 4096):
+                        choice = 0
+                        break
+
+                for province in [index_2_prov[i+1], index_2_prov[j+1]]:
+                    if (choice == 33 or choice == 36) and not has_terrain(terrain, 8388608):
+                        province.terrain_int += 8388608
+
+                self.connections[plane].append(Connection(connected_provinces={i+1, j+1}, connection_int=choice))
+
+        self.min_dist[plane] = self.province_graphs[plane].get_min_dist()
 
     def generate_gates(self, region_list, seed: int = None):
         dibber(self, seed)  # Setting random seed

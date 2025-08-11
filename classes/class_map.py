@@ -6,128 +6,15 @@ from . import *
 
 class DominionsMap:
 
-    """
-    A class to represent a map in the Dominions game.
-
-    Attributes
-    ----------
-    settings : None
-        Placeholder for settings.
-    homeland_list : list
-        List of homelands.
-    periphery_list : list
-        List of peripheries.
-    throne_list : list
-        List of thrones.
-    province_list : list
-        List of provinces for each plane.
-    armies_list : list
-        List of armies for each plane.
-    pretenders_list : list
-        List of pretenders for each plane.
-    map_title : str
-        Title of the map.
-    image_file : list
-        List of image files for each plane.
-    image_pil : list
-        List of PIL images for each plane.
-    map_size : list
-        List of map sizes for each plane.
-    scale : list
-        List of scales for each plane.
-    planes : set
-        Set of planes.
-    dom_version : str
-        Version of Dominions.
-    scenario : bool
-        Indicates if the map is a scenario.
-    description : str
-        Description of the map.
-    neighbour_list : list
-        List of neighbours for each plane.
-    special_neighbour_list : list
-        List of special neighbours for each plane.
-    pixel_owner_list : list
-        List of pixel owners for each plane.
-    province_names_list : list
-        List of province names for each plane.
-    terrain_list : list
-        List of terrains for each plane.
-    population_list : list
-        List of populations for each plane.
-    gate_list : list
-        List of gates for each plane.
-    map_text_colour : list
-        List of map text colours.
-    map_dom_colour : list
-        List of map dominion colours.
-    max_sail_distance : list
-        List of maximum sail distances for each plane.
-    magic_sites : list
-        List of magic sites for each plane.
-    capital_names : bool
-        Indicates if capital names are used.
-    allowed_nations_list : list
-        List of allowed nations.
-    computer_player_list : list
-        List of computer players.
-    ai_allies_list : list
-        List of AI allies.
-    victory_type : list
-        List of victory types.
-    cannot_win_list : list
-        List of provinces that cannot win.
-    victory_point_provinces : list
-        List of victory point provinces for each plane.
-    start_locations : list
-        List of start locations for each plane.
-    no_start_locations : list
-        List of no start locations for each plane.
-    special_start_locations : list
-        List of special start locations for each plane.
-    team_start_locations : list
-        List of team start locations for each plane.
-    seed : int
-        Seed for random generation.
-    layout : None
-        Placeholder for layout.
-    pixel_map : list
-        List of pixel maps for each plane.
-    height_map : list
-        List of height maps for each plane.
-    min_dist : list
-        List of minimum distances for each plane.
-    province_capital_locations : list
-        List of province capital locations for each plane.
-
-    Methods
-    -------
-    __init__():
-        Initializes the map with default values.
-    load_file(filepath, plane=1):
-        Loads a map file.
-    fill_dreamatlas(plane_image_types):
-        Fills the map with DreamAtlas data.
-    load_folder(folderpath):
-        Loads all map files from a folder.
-    make_map_file(plane, filepath):
-        Creates a .map file.
-    make_d6m(plane, filepath):
-        Creates a .d6m file.
-    publish(location=None, name=None, art_style=0):
-        Publishes the map.
-    plot():
-        Plots the map.
-    __str__():
-        Returns a string representation of the map.
-    """
-
     def __init__(self):  # Map classes always initialise empty to be filled in later
 
         # DreamAtlas required data
         self.settings = None
         self.region_list = [[] for _ in range(7)]
         self.province_list = [[] for _ in range(10)]
+        self.connection_list = [[] for _ in range(10)]
+        self.neighbour_list = [[] for _ in range(10)]
+        self.special_neighbour_list = [[] for _ in range(10)]
         self.armies_list = [[] for _ in range(10)]
         self.pretenders_list = [[] for _ in range(10)]
 
@@ -143,8 +30,6 @@ class DominionsMap:
         self.dom_version = '600'
         self.scenario = False
         self.description = "An exciting map made using Tlaloc\'s DreamAtlas!"
-        self.neighbour_list = [[] for _ in range(10)]
-        self.special_neighbour_list = [[] for _ in range(10)]
         self.pixel_owner_list = [[] for _ in range(10)]
         self.province_names_list = [[] for _ in range(10)]
         self.terrain_list = [[] for _ in range(10)]
@@ -184,6 +69,8 @@ class DominionsMap:
         self.ygg_emoji = ':smile:'
 
     def load_file(self, filepath, plane=1):  # Instructs the map class to load in a file.
+
+        # Preloading province numbers
 
         if filepath.endswith('.map'):
             with open(filepath, 'r') as f:
@@ -328,7 +215,6 @@ class DominionsMap:
                         self.province_list[plane][-1].population = population
 
             for (i, j) in self.neighbour_list[plane]:
-                self.layout.neighbours[plane].append([i-1, j-1])
                 self.layout.province_graphs[plane].connect_nodes(i-1, j-1)
 
             for (i, j, c) in self.special_neighbour_list[plane]:
@@ -352,7 +238,7 @@ class DominionsMap:
                 for x in range(self.map_size[plane][0]):
                     for y in range(self.map_size[plane][1]):
                         yr = self.map_size[plane][1]-y-1
-                        if pixels[x, y] == (255, 255, 255):
+                        if pixels[x, y][0:3] == (255, 255, 255):
                             all_capital_locations.append((x, yr))
 
                 for x, y in all_capital_locations:
@@ -472,14 +358,12 @@ class DominionsMap:
                     f.write('#terrain ' + ' '.join(map(str, self.terrain_list[plane][entry])) + '\n')
 
             # Neighbour info
-            if len(self.neighbour_list[plane]) != 0:
-                f.write('\n--Neighbour info\n')
-                for entry in range(len(self.neighbour_list[plane])):
-                    f.write('#neighbour ' + ' '.join(map(str, self.neighbour_list[plane][entry])) + '\n')
-            if len(self.special_neighbour_list[plane]) != 0:
-                f.write('\n--Special Neighbour info\n')
-                for entry in range(len(self.special_neighbour_list[plane])):
-                    f.write('#neighbourspec ' + ' '.join(map(str, self.special_neighbour_list[plane][entry])) + '\n')
+            if len(self.connection_list[plane]) != 0:
+                for connection in self.connection_list[plane]:
+                    f.write('#neighbour ' + ' '.join(map(str, connection.connected_provinces)) + '\n')
+                    if connection.connection_int != 0:
+                        f.write(f'#neighbourspec ' + ' '.join(map(str, connection.connected_provinces)) + f' {connection.connection_int}' + '\n')
+
             if len(self.gate_list[plane]) != 0:
                 f.write('\n--Gate info\n')
                 for i in self.gate_list[plane]:
@@ -491,8 +375,18 @@ class DominionsMap:
             for province in self.province_list[plane]:
                 if province.has_commands:
                     f.write('#setland %i\n' % province.index)
+                    if province.unrest > 0:
+                        f.write('#unrest %i\n' % province.unrest)
                     if province.population is not None:
                         f.write('#population %i\n' % province.population)
+                    if province.poptype is not None:
+                        f.write('#poptype %i\n' % province.poptype)
+                    if province.fort is not None:
+                        f.write('#fort %i\n' % province.fort)
+                    if province.temple:
+                        f.write('#temple\n')
+                    if province.lab:
+                        f.write('#lab\n')
 
             # Pixel ownership info
             f.write('\n--Pixel ownership info\n')

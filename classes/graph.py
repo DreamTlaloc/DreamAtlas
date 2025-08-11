@@ -4,8 +4,11 @@ import minorminer as mnm
 import networkx as ntx
 import random as rd
 from numba import njit, prange
-from numba.experimental import jitclass
 from DreamAtlas.databases import NEIGHBOURS_FULL
+
+
+def less_first(a, b):
+    return [a, b] if a < b else [b, a]
 
 
 @njit(cache=True)
@@ -134,6 +137,11 @@ class DreamAtlasGraph:
         self.map_size = map_size
         self.wraparound = wraparound
 
+        self.index_2_iid = dict()  # Maps the index to the disciples
+        for i in range(size):
+            self.index_2_iid[i] = i
+
+        self.types = np.zeros(size, dtype=np.int8)
         self.plot_colour = ['r*' for _ in range(size)]  # Exclusively for plotting purposes
 
     def get_node_connections(self, i):
@@ -148,6 +156,9 @@ class DreamAtlasGraph:
     def get_length(self, i, j):
         return np.linalg.norm(self.get_vector(i, j))
 
+    def get_unit_vector(self, i, j):
+        return self.get_vector(i, j) / self.get_length(i, j)
+
     def get_min_dist(self):
         min_dist = np.inf
         for i, j in self.get_all_connections():
@@ -155,6 +166,27 @@ class DreamAtlasGraph:
             if dist < min_dist:
                 min_dist = dist
         return min_dist
+
+    def get_closest_dart(self, i, j):  # Returns the shortest dart from i to j
+
+        min_dist = np.inf
+        for n in NEIGHBOURS_FULL:
+            v_vector = self.coordinates[j] + n * self.map_size - self.coordinates[i]
+            dist = np.linalg.norm(v_vector)
+            if dist < min_dist:
+                min_dist = dist
+                vector = v_vector
+
+        dart = np.zeros(2, dtype=np.int8)
+        for axis in [0, 1]:
+            if not (0 <= self.coordinates[i][axis] + vector[axis] < self.map_size[axis]):
+                dart[axis] = np.sign(self.coordinates[i][axis] + vector[axis])
+
+        return dart
+
+    def get_dart_from_coordinate(self, r1, r2):
+
+        return np.floor_divide(r2, self.map_size) - np.floor_divide(r1, self.map_size)
 
     def disconnect_nodes(self, i, j):
 
@@ -170,10 +202,8 @@ class DreamAtlasGraph:
 
     def insert_connection(self, i, j, k):  # Inserts a new node k between two existing nodes i, j
 
-        self.graph[i, k] = 1
-        self.graph[k, i] = 1
-        self.graph[j, k] = 1
-        self.graph[k, j] = 1
+        self.connect_nodes(i, k)
+        self.connect_nodes(k, j)
 
         vector = self.coordinates[j] + self.darts[i, j] * self.map_size - self.coordinates[i]
         self.coordinates[k] = np.mod(self.coordinates[i] + 0.5 * vector, self.map_size)   # Find the coordinate between i, j
@@ -192,28 +222,15 @@ class DreamAtlasGraph:
         self.darts[k, j] = -j_dart
         self.disconnect_nodes(i, j)
 
-    def insert_face(self, face, k, r):
+    def insert_face(self, face, i, r):
 
-        self.coordinates[k] = r
+        self.coordinates[i] = r
 
-        for i, _ in face:
-            self.connect_nodes(i, k)
-
-            min_dist = np.inf
-            for n in NEIGHBOURS_FULL:
-                v_vector = self.coordinates[i] + n * self.map_size - self.coordinates[k]
-                dist = np.linalg.norm(v_vector)
-                if dist < min_dist:
-                    min_dist = dist
-                    vector = v_vector
-
-            i_dart = np.zeros(2, dtype=np.int8)
-            for axis in [0, 1]:
-                if not (0 <= self.coordinates[k][axis] + vector[axis] < self.map_size[axis]):
-                    i_dart[axis] = np.sign(self.coordinates[k][axis] + vector[axis])
-
-            self.darts[k, i] = i_dart
-            self.darts[i, k] = -i_dart
+        for j, _ in face:
+            self.connect_nodes(i, j)
+            dart = self.get_closest_dart(i, j)
+            self.darts[i, j] = dart
+            self.darts[j, i] = -dart
 
     def get_faces_centroids(self, planes=[1, 2]):
 
@@ -360,10 +377,34 @@ class DreamAtlasGraph:
         for i, j in self.get_all_connections():  # Set the darts for the graph
             self.darts[i, j] = dart_dict[(i, j)]
 
-    def make_delaunay_graph(self, planes=[1, 2]):
+    def embed_disciples(self, teams, seed):
 
-        def less_first(a, b):
-            return [a, b] if a < b else [b, a]
+        teams_graph = ntx.Graph()
+        target_graph = ntx.Graph(incoming_graph_data=self.graph)
+        nations = set()
+        for i in teams:  # Create the subgraph for the team and add it to the disciples graph
+            team = teams[i]
+            teams_graph.add_node(team[0])
+            for j in team:
+                nations.add(j)
+            for j, k in list(zip(team, team[1:])):
+                teams_graph.add_edge(j, k)
+
+        for i in range(10):
+            initial_embedding, worked = mnm.find_embedding(teams_graph, target_graph, return_overlap=True, random_seed=seed)
+            if worked:
+                break
+            else:
+                seed = rd.randint(0, 100000)
+                print('\033[31mDisciples embedding failed: Trying with new seed (%i)\x1b[0m' % seed)
+        if not worked:
+            raise Exception('DiscipleEmbeddingError: Failed 10 times')
+
+        for i in nations:  # Assign the players to the graphs to be tracked later
+            for node in initial_embedding[i]:
+                self.index_2_iid[node] = i
+
+    def make_delaunay_graph(self, planes=[1, 2]):
 
         points, key_list, counter = list(), dict(), 0
         for i in range(self.size):  # Set up the virtual points on the toroidal plane
@@ -396,6 +437,72 @@ class DreamAtlasGraph:
                         dart[axis] = 1
                 self.darts[i, j] = dart
                 self.darts[j, i] = -dart
+
+    def get_small_delaunay(self, planes=[1, 2]):
+
+        edges, coordinates, darts = list(), list(), list()
+
+        points, key_list, counter = list(), dict(), 0
+        for i in range(self.size):  # Set up the virtual points on the toroidal plane
+            if self.planes[i] in planes:
+                for j, n in enumerate(self.wraparound):
+                    coordinate = self.coordinates[i] + n * self.map_size
+                    points.append([coordinate[0], coordinate[1]])
+                    key_list[counter] = i
+                    counter += 1
+
+        tri = sc.spatial.Delaunay(np.array(points), qhull_options='QJ')
+
+        list_of_edges = list()
+        for triangle in tri.simplices:
+            for e1, e2 in [[0, 1], [1, 2], [2, 0]]:  # for all edges of triangle
+                list_of_edges.append(less_first(triangle[e1], triangle[e2]))  # always lesser index first
+
+        for p1, p2 in np.unique(list_of_edges, axis=0):  # remove duplicates
+            i, j = key_list[p1], key_list[p2]
+            i_c = tri.points[p1]
+            if (0 <= i_c[0] < self.map_size[0]) and (0 <= i_c[1] < self.map_size[1]):  # only do this for nodes in the map
+
+                j_c = tri.points[p2]
+
+                dart = np.zeros(2, dtype=np.int8)
+                for axis in range(2):
+                    if j_c[axis] < 0:
+                        dart[axis] = -1
+                    elif j_c[axis] >= self.map_size[axis]:
+                        dart[axis] = 1
+
+                edges.append([i, j])
+                coordinates.append([(int(i_c[0]+j_c[0])/2) % self.map_size[0], (int(i_c[1]+j_c[1])/2) % self.map_size[1]])
+                darts.append([self.get_dart_from_coordinate(coordinates[-1], i_c), self.get_dart_from_coordinate(coordinates[-1], j_c)])
+
+        return edges, coordinates, darts
+
+    def clean_delaunay_graph(self):
+
+        quads = list()
+        for i, j in self.get_all_connections():  # First make the set of all double-triangle quads
+
+            if self.types[i] == 1 and self.types[j] == 1:  # If this is a cap/cap-circle edge ignore it
+                continue
+
+            try:
+                k, l = np.intersect1d(self.get_node_connections(i), self.get_node_connections(j))[:2]  # Find the 2 shared nodes and add them
+
+                alpha = np.arccos(np.dot(self.get_unit_vector(i, k), self.get_unit_vector(j, k)))
+                gamma = np.arccos(np.dot(self.get_unit_vector(i, l), self.get_unit_vector(j, l)))
+
+                if alpha + gamma > np.pi:  # If they do not, swap the edge correctly
+                    quads.append([i, j, k, l])
+            except:
+                print(f'GraphError: Failed to find 2 shared nodes for {i}-{j}')
+
+        for i, j, k, l in quads:
+            self.disconnect_nodes(i, j)
+            self.connect_nodes(k, l)
+            dart = self.get_closest_dart(k, l)
+            self.darts[k, l] = dart
+            self.darts[l, k] = -dart
 
     def spring_adjustment(self, iterations=None, ratios=None):
         if ratios is None:

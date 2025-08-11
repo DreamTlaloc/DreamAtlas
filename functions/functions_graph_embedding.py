@@ -1,5 +1,3 @@
-from numba.np.arrayobj import dtype_type
-
 from DreamAtlas import *
 
 

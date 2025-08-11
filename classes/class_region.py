@@ -76,10 +76,10 @@ class Region:
                 if self.layout[0] == 0:
                     terrain_set.add(4)
 
-            elif i <= self.anchor_connections:  # Circle provinces
-                terrain_set.add(terrain_picks[i])
-                if i > self.layout[1] * self.anchor_connections:  # Circle sea/land split
-                    terrain_set.add(4)  # Sea
+            # elif i <= self.anchor_connections:  # Circle provinces
+            #     terrain_set.add(terrain_picks[i])
+            #     if i > self.layout[1] * self.anchor_connections:  # Circle sea/land split
+            #         terrain_set.add(4)  # Sea
 
             else:  # Extra provinces
                 terrain_set.add(terrain_picks[i])
@@ -201,6 +201,7 @@ class HomelandRegion(Region):
 
             elif i <= self.anchor_connections:  # Generate the anchor connections, rotating randomly, then adding some small random angle/radius change
                 province.coordinates = np.asarray([np.cos(theta[i-1]), np.sin(theta[i-1])])
+                province.capital_circle = True
 
             else:  # Place the remaining extra provinces attached to non-anchor provinces
                 j = rd.choice(range(1, 1 + self.anchor_connections))
@@ -223,13 +224,14 @@ class HomelandRegion(Region):
         for i in range(self.region_size):  # Apply the terrain and land/sea/cave tags to each province
 
             province = self.provinces[i]
-            terrain_set = {0, 512, 134217728}  # Plains, No Start, Bad Throne Location
+            # terrain_set = {0, 512, 134217728}  # Plains, No Start, Bad Throne Location
+            terrain_set = {0, 134217728}  # Plains, Bad Throne Location
 
             if province.plane == 2:
                 terrain_set.add(4096)  # Cave layer
 
             if i == 0:  # Anchor province
-                terrain_set.remove(512)  # Remove no start
+                # terrain_set.remove(512)  # Remove no start
                 terrain_set.add(67108864)  # Good start location
                 for terrain in terrain_int2list(self.terrain):
                     terrain_set.add(terrain)  # Capital terrain

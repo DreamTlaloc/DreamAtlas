@@ -1,5 +1,5 @@
 from DreamAtlas import *
-from DreamAtlas.functions.numba_pixel_mapping import _numba_height_map
+from .DreamAtlas_geo_generator import simplex_generator_geography
 
 
 def generator_dreamatlas(settings: type(DreamAtlasSettings),
@@ -30,7 +30,6 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
         nation_list.append(CustomNation(custom_nation_data))
     for generic_nation_data in settings.generic_nations:
         nation_list.append(GenericNation(generic_nation_data))
-    # rd.shuffle(nation_list)
     for i, nation in enumerate(nation_list):
         nation.iid = i
 
@@ -47,10 +46,10 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
     pixels[0] += PIXELS_PER_PROVINCE * settings.vast_region_num
     pixels[1] += PIXELS_PER_PROVINCE * settings.cave_region_num * REGION_CAVE_INFO[settings.cave_region_type][2] * 4
 
-    map_class.map_size[1:3] = np.outer(np.sqrt(pixels), np.asarray([1, 0.588])).round(decimals=-2).astype(dtype=np.uint32)
+    map_class.map_size[1:3] = np.multiply(np.floor_divide(np.outer(np.sqrt(pixels), np.asarray([1, 0.588])), 256), 256).astype(dtype=np.uint32)
     map_class.wraparound = NEIGHBOURS[settings.wraparound]
     map_class.scale[1] = min(map_class.map_size[1]) * np.asarray([0.035])
-    map_class.scale[2] = min(map_class.map_size[2]) * np.asarray([0.03])
+    map_class.scale[2] = min(map_class.map_size[1]) * np.asarray([0.05])
     map_class.planes = [1, 2]
     layout = DominionsLayout(map_class)
     layout.generate_region_layout(settings=map_class.settings, map_size=map_class.map_size[1], nation_list=nation_list, seed=map_class.seed)
@@ -67,12 +66,12 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
         region_type = layout.region_types[i]
 
         if region_type == 0:  # Generate the homelands
-            new_region = HomelandRegion(index=i, nation=nation_list[i], settings=settings, seed=map_class.seed)
+            new_region = HomelandRegion(index=i, nation=nation_list[layout.region_graph.index_2_iid[i]], settings=settings, seed=map_class.seed)
         elif region_type == 1:  # Generate the peripherals
             nations = list()
             for j in layout.region_graph.get_node_connections(i):
                 if j < len(nation_list):
-                    nations.append(nation_list[int(j)])
+                    nations.append(nation_list[layout.region_graph.index_2_iid[int(j)]])
             new_region = PeripheryRegion(index=i, nations=nations, settings=settings, seed=map_class.seed)
         elif region_type == 2:  # Generate the thrones
             new_region = ThroneRegion(index=i, settings=map_class.settings, seed=map_class.seed)
@@ -113,8 +112,7 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
 
     for plane in map_class.planes:
         layout.generate_province_layout(province_list[plane], plane=plane)
-        layout.generate_neighbours(plane=plane)
-        layout.generate_special_neighbours(plane=plane)
+        layout.generate_connections(plane=plane)
     layout.generate_gates(region_list=region_list)
 
     # Check to add omni here
@@ -145,35 +143,17 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
 
     map_class.special_start_locations = special_start_locations
     map_class.terrain_list = terrain_list
-    map_class.neighbour_list = layout.neighbours
+    map_class.connection_list = layout.connections
     map_class.min_dist = layout.min_dist
-    map_class.special_neighbour_list = layout.special_neighbours
     map_class.gate_list = layout.gates
     map_class.layout = layout
 
     ########################################################################################################################
     # Do pixel mapping
-    generator_logging('Pixel mapping...')
+    generator_logging('Simulating geography...')
+    map_class.height_map, map_class.pixel_map = simplex_generator_geography(map_class, seed=map_class.seed)
     for plane in map_class.planes:
-        shapes = dict()
-        for province in province_list[plane]:
-            shapes[province.index] = [province.shape, 1 / province.shape]
-
-        map_class.pixel_map[plane] = find_pixel_ownership(layout.province_graphs[plane].coordinates, map_class.map_size[plane], shapes, hwrap=True, vwrap=True, scale_down=8)
         map_class.pixel_owner_list[plane] = pb_pixel_allocation(map_class.pixel_map[plane])
-
-        height_array = np.zeros(len(province_list[plane])+1, dtype=np.int16)
-        for province in map_class.province_list[plane]:
-            height = 20
-            if has_terrain(province.terrain_int, 4):
-                height = -30
-            if has_terrain(province.terrain_int, 2052):
-                height = -100
-            if has_terrain(province.terrain_int, 68719476736):  # testing cave wall rendering hypothesis
-                height = -100
-            height_array[province.index] = height
-
-        map_class.height_map[plane] = _numba_height_map(map_class.pixel_map[plane], height_array)
 
     map_class.ygg_desc = 'example desc'
     map_class.ygg_emoji = ':earth_africa:'

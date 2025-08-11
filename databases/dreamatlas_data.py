@@ -2,6 +2,7 @@ import numpy as np
 import pathlib
 import os
 import sys
+import matplotlib as mpl
 
 # Terrain preference vector is the weighting for each type of terrain
 TERRAIN_PREF_BITS = [0, 16, 32, 64, 128, 256]
@@ -17,7 +18,7 @@ TERRAIN_PREF_BALANCED, TERRAIN_PREF_PLAINS, TERRAIN_PREF_FOREST, TERRAIN_PREF_MO
 
 # Layout preference vector informs the land-sea split
 LAYOUT_PREFERENCES = [  # LAYOUT_PREF_XXXX = [cap terrain, cap provinces ratio, extra provinces ratio]
-    [1, 1.0, 0.9],          # Land
+    [1, 1.0, 0.85],         # Land
     [1, 1.0, 1.0],          # Cave
     [1, 0.9, 0.8],          # Coast
     [1, 0.0, 0.9],          # Island
@@ -42,12 +43,12 @@ REGION_CAVE_INFO = [
     [TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 6, 4, 3]
 ]
 
-REGION_VAST_INFO = [0, 0, 0, 0, 0, 0]
+REGION_VAST_INFO = [17179869184, 17179869184, 17179869184, 17179869184, 17179869184, 17179869184]
 
 # Blocker vector informs how different blockers are created
 REGION_BLOCKER_INFO = {  # BLOCKER_XXXX = [plane, terrain int, region_size, anchor_connections]
     6: [1, 16 + 8388608 + 68719476736 + 549755813888, 3, 2],    # Mountain Range
-    8: [2, 4096 + 68719476736 + 576460752303423488, 4, 6]       # Cave Wall
+    8: [2, 4 + 4096 + 68719476736 + 576460752303423488, 4, 3]       # Cave Wall
 }
 
 HOMELANDS_INFO = [  # Homelands format: [Nation index, terrain preference, layout preference, capital terrain int, plane]
@@ -176,12 +177,32 @@ PERIPHERY_INFO = [
     [TERRAIN_PREF_BALANCED, LAYOUT_PREF_DEEPS]      # 11 UNDERSEA
 ]
 
-TERRAIN_2_HEIGHTS_DICT = {0: 0, 4: -400, 16: 200, 32: 50, 64: 300, 128: 90, 256: 250, 2048: -100, 4096: 1000, 8388608: 500, 68719476736: -100}
-TERRAIN_2_SHAPES_DICT = {0: 1, 4: 1.1, 8: 0.9, 16: 0.9, 32: 1.1, 64: 1.2, 128: 1.2, 256: 0.9, 2048: 1, 4096: 1.1, 8388608: 1, 68719476736: 1}
+TERRAIN_2_HEIGHTS_DICT = {0: 5, 4: -25, 16: 10, 32: 2, 64: 3, 128: 9, 256: 4, 2048: -10, 4096: 20, 8388608: 20, 17179869184: 3, 68719476736: -10}
+TERRAIN_2_SHAPES_DICT = {0: 1, 4: 1.1, 8: 0.9, 16: 0.9, 32: 1.1, 64: 1.2, 128: 1.2, 256: 0.9, 2048: 1, 4096: 1.1, 8388608: 1, 17179869184: 1, 68719476736: 1}
 TERRAIN_POPULATION_ORDER = {0: 4, 16: 2, 32: 1, 64: 0, 128: 3, 256: 5}  # TERRAIN_PREF_XXXX = [plains, highlands, swamp, waste, forest, farm]
 
 # Connections config [Standard border, Mountain pass, River border, Impassable, Road, River bridge, Impassable mountain]
-NEIGHBOUR_SPECIAL_WEIGHTS = [0.8, 0.05, 0.05, 0, 0.05, 0.02, 0.05, 0]
+NEIGHBOUR_SPECIAL_WEIGHTS = [0.8, 0.05, 0.05, 0, 0.05, 0.02, 0.05]
+
+COLOURS_PROVINCES = mpl.colormaps['gist_stern']
+COLOURS_REGIONS = mpl.colormaps['tab20']
+COLOURS_TERRAIN = mpl.colormaps['terrain']
+COLOURS_POPULATION = mpl.colormaps['Greens']
+COLOURS_RESOURCES = mpl.colormaps['Oranges']
+COLOURS_DICT = {16: 0.75,
+                32: 0.22,
+                64: 0.55,
+                128: 0.3,
+                256: 0.4,
+                4: 0.1,
+                2052: 0.01,
+                132: 0.25,
+                4096: 0.7,
+                4128: 0.2,
+                4160: 0.55,
+                4224: 0.3,
+                8589934592: 0.85,
+                68719476736: 0.85}  # Terrain colours
 
 # UNIVERSAL FUNCTIONS AND VARIABLES
 ########################################################################################################################
@@ -191,12 +212,12 @@ if getattr(sys, "frozen", False):
     # path into variable
     ROOT_DIR = pathlib.Path(__file__).parent.parent
     LOAD_DIR = pathlib.Path(sys.executable).parent
-    ART_ICON = ROOT_DIR / r'databases/DreamAtlasLogoSquare.png'
+    ART_ICON = ROOT_DIR / r'databases/ui_images/DreamAtlasLogoSquare.png'
 else:
     # Normal development mode. Use os.getcwd() or __file__ as appropriate in your case...
     ROOT_DIR = pathlib.Path(__file__).parent.parent
     LOAD_DIR = ROOT_DIR
-    ART_ICON = ROOT_DIR / r'databases/DreamAtlasLogoSquare.png'
+    ART_ICON = ROOT_DIR / r'databases/ui_images/DreamAtlasLogoSquare.png'
 
 AGES = ['Early Age', 'Middle Age', 'Late Age']
 

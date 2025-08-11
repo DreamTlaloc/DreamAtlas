@@ -1,91 +1,67 @@
-import numpy as np
-
 from DreamAtlas import *
 
 
-# @njit(parallel=True, fastmath=True)
-def _numba_init_height_map(height_map, height_list):
+def make_noise_array(map_size, scale):
+    x_size, y_size = map_size
+    noise_array = np.zeros((x_size, y_size, 2), dtype=np.float32)
 
-    for height, x, y in range(height_list):
-        height_map[x, y] = height
+    base_x, base_y = np.random.randint(1, 10000, size=2, dtype=np.int32)
 
-    return height_map
+    for x in range(map_size[0]):
+        for y in range(map_size[1]):
+            vx, vy = x/x_size, y/y_size
 
+            noise_array[x, y, 0] = ns.snoise2(vx, vy, octaves=7, persistence=0.90, lacunarity=2.0, repeatx=1, repeaty=1, base=base_x)
+            noise_array[x, y, 1] = ns.snoise2(vx, vy, octaves=7, persistence=0.90, lacunarity=2.0, repeatx=1, repeaty=1, base=base_y)
 
-# @njit(parallel=True, fastmath=True)
-def _numba_flow_map(height_map, min_seeds, iterations=1000):
-
-    ping_filled_map = np.zeros(height_map.shape, dtype=np.float32)
-    ping_filled_map *= 300
-    pong_filled_map = np.zeros(height_map.shape, dtype=np.float32)
-
-    flow_map = np.zeros((height_map.shape[0], height_map.shape[1], 2), dtype=np.int32)
-
-    for h, x, y, in min_seeds:
-        ping_filled_map[x, y] = height_map[x, y]
-
-    neighbours = np.array([[1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [0, -1], [-1, -1], [-1, 0]], dtype=np.int32)
-
-    # Fill all the depressions
-    for _ in range(iterations):
-        for x in prange(height_map.shape[0]):
-            for y in prange(height_map.shape[1]):
-                lowest = np.inf
-                for n in neighbours:
-                    x_n = x + n[0]
-                    y_n = y + n[1]
-
-                    x_v = x_n % height_map.shape[0]
-                    y_v = y_n % height_map.shape[1]
-
-                    if ping_filled_map[x, y] > ping_filled_map[x_v, y_v] and ping_filled_map[x_v, y_v] < lowest:
-                        lowest = ping_filled_map[x_v, y_v]
-                        flow = n
-
-                if lowest == np.inf:
-                    continue
-
-                pong_filled_map[x, y] = max(height_map[x, y], lowest)
-                flow_map[x, y] = flow
-
-        if np.sum(ping_filled_map - pong_filled_map) < 0.1:
-            break
-        pong_filled_map = ping_filled_map
-
-    return flow_map, pong_filled_map
+    return noise_array * scale
 
 
-def generator_geography(map_class, seed=None):
+@njit(parallel=True, cache=True, fastmath=True)
+def cleanup_isolated_pixels(pixel_map):
 
-    height_maps = list()
-    pixel_maps = list()
+    output_pixel_map = pixel_map
+    shape_x, shape_y = np.shape(pixel_map)
+
+    for iteration in range(5):
+        for x in prange(shape_x):
+            for y in prange(shape_y):
+
+                isolated = 0
+
+                for n in [[1, 0], [0, 1], [-1, 0], [0, -1]]:
+                    vx, vy = x + n[0], y + n[1]
+                    vx, vy = vx % shape_x, vy % shape_y
+
+                    if pixel_map[vx, vy] == pixel_map[x, y]:
+                        isolated += 1
+
+                if isolated <= 1:
+                    output_pixel_map[x, y] = pixel_map[vx, vy]
+
+    return output_pixel_map
+
+
+def simplex_generator_geography(map_class, seed=None):
+
+    if seed is None:
+        seed = np.random.randint(1, 1000000)
+    np.random.seed(seed)
+
+    height_maps = [None for _ in range(10)]
+    pixel_maps = [None for _ in range(10)]
 
     # Generate the initial height map
     for plane in map_class.planes:
-        height_map = np.zeros(map_class.map_size[plane], dtype=np.float32)
-        height_list = np.array((len(map_class.province_list[plane]), 3), dtype=np.float32)
 
-        for i, province in enumerate(map_class.province_list[plane]):  # Making the initial height map from the province heights
-            height_list[i] = np.array((province.height, province.coordinates[0], province.coordinates[1]))
+        height_array = np.zeros(len(map_class.province_list[plane])+1, dtype=np.int16)
+        for province in map_class.province_list[plane]:
+            height_array[province.index] = terrain_2_height(province.terrain_int)
 
-        height_map = _numba_init_height_map(height_map, height_list)
+        noise_array = make_noise_array(map_class.map_size[plane], 150)
 
-        # Add noise
-
-        # Find the flow map
-        flow_map, filled_map = _numba_flow_map(height_map, min_seeds, iterations=1000)
-
-        height_maps[plane] = height_map
-        pixel_maps[plane] = find_pixel_ownership(map_class.layout.province_graphs[plane].coordinates, map_class.map_size[plane], shapes, hwrap=True, vwrap=True, scale_down=8)
+        pixel_maps[plane] = find_pixel_ownership(map_class.layout.province_graphs[plane].coordinates, map_class.map_size[plane], noise_array,  scale_down=4)
+        height_maps[plane] = numba_height_map(pixel_maps[plane], height_array)
+        # pixel_maps[plane] = cleanup_isolated_pixels(pixel_maps[plane])
 
     return height_maps, pixel_maps
-
-
-def plot_geography(height_map):
-
-    fig, axs = plt.subplots(subplot_kw={'projection': '3d'})
-
-    X, Y = np.meshgrid(np.arange(height_map.shape[1]), np.arange(height_map.shape[0]))
-    axs[i].surface(X, Y, height_map, cmap='terrain', edgecolor='none')
-
-    axs[i].axis('off')

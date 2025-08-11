@@ -1,15 +1,16 @@
 from DreamAtlas import *
 from .loading import GeneratorLoadingWidget
 from .ui_data import *
+from threading import Thread
 
 
 class InputToplevel(ttk.Toplevel):
 
-    def __init__(self, master, title, ui_config, cols, target_type=None, target_class=None, target_location=None, map=None, parent_widget=None):
+    def __init__(self, master, title, ui_config, target_type=None, target_class=None, target_location=None, map=None, parent_widget=None, geometry=""):
         super().__init__(title=title, iconphoto=ART_ICON, transient=master, master=master)
-        self.columnconfigure(0, weight=1)
-        widget = InputWidget(master=self, ui_config=ui_config, cols=cols, target_type=target_type, target_class=target_class, target_location=target_location, map=None, parent_widget=parent_widget)
-        widget.grid(row=0, column=0, sticky='NEWS')
+        widget = InputWidget(master=self, ui_config=ui_config, target_type=target_type, target_class=target_class, target_location=target_location, map=None, parent_widget=parent_widget)
+        widget.pack(fill=BOTH, expand=True)
+        self.geometry(geometry)
 
         if target_class is not None:
             widget.class_2_input()
@@ -17,10 +18,9 @@ class InputToplevel(ttk.Toplevel):
 
 class InputWidget(ttk.Frame):
 
-    def __init__(self, master, ui_config, cols, target_type=None, target_class=None, target_location=None, map=None, parent_widget=None):
+    def __init__(self, master, ui_config,target_type=None, target_class=None, target_location=None, map=None, parent_widget=None):
         super().__init__(master=master)
         self.ui_config = ui_config
-        self.cols = cols
         if target_class is None:
             target_class = type(target_type)
         self.target_class = target_class
@@ -28,8 +28,6 @@ class InputWidget(ttk.Frame):
         self.map = map
         self.parent_widget = parent_widget
 
-        self.grid(sticky='NEWS')
-        self.grid_columnconfigure(0, weight=1)
         self.labels = dict()
         self.inputs = dict()
         self.variables = dict()
@@ -42,70 +40,121 @@ class InputWidget(ttk.Frame):
             ['Reset', lambda: self.clear()],
             ['Close', lambda: self.master.destroy()]
         ]
+
+        self.wrap_frame = None
+        self.frame_tags = list()
+        self.frames = list()
+        self.cols = 0
+        self.nation_cols = 0
+        self.bind("<Configure>", self.make_size)
         self.make_gui()
+        self.make_size(None)  # Initial resize to set the input window size
+
+    def make_size(self, event):  # Resize the input window to match the current size
+        self.wrap_frame.update()
+        new_small_cols = max(1, self.wrap_frame.winfo_width() // INPUT_ENTRY_SIZE)
+        new_nation_cols = max(1, int(self.wrap_frame.winfo_width() / 120))
+
+        for i, frame in enumerate(self.frames):
+            for j, child in enumerate(frame.winfo_children()):
+                if type(child) is CustomGenericNationWidget:
+                    child.update(cols=new_small_cols)
+                    break
+
+        if self.cols != new_small_cols:
+            self.cols = new_small_cols
+            for i, frame in enumerate(self.frames):
+                for j, child in enumerate(frame.winfo_children()):
+                    if type(child) is not VanillaNationWidget and type(child) is not CustomGenericNationWidget and type(child) is not TerrainWidget:
+                        child.grid(row=j // self.cols, column=j % self.cols, sticky='NEWS', pady=2, padx=2)
+
+        if self.nation_cols != new_nation_cols:
+            self.nation_cols = new_nation_cols
+            for i, frame in enumerate(self.frames):
+                for j, child in enumerate(frame.winfo_children()):
+                    if type(child) is VanillaNationWidget or type(child) is CustomGenericNationWidget:
+                        child.update(self.variables['disciples'].get(), cols=new_nation_cols)
+                    elif type(child) is TerrainWidget:
+                        child.update(cols=new_nation_cols)
+
+        y = 5
+        for i, frame in enumerate(self.frames):
+            self.wrap_frame.itemconfig(self.frame_tags[i], width=self.wrap_frame.winfo_width()-5)
+            self.wrap_frame.coords(self.frame_tags[i], 5, y)
+            self.wrap_frame.update()
+            y += frame.winfo_height() + 2
+
+        self.wrap_frame.configure(scrollregion=self.wrap_frame.bbox('all'))
 
     def make_gui(self):
 
-        frames = list()  # Make the label frames for the inputs and filling them
-        for index, (text, attributes) in enumerate(self.ui_config['label_frames']):
-            frames.append(ttk.Labelframe(self, text=text, padding=5))
-            self.grid_rowconfigure(index, weight=1)
-            frames[-1].grid(row=index, column=0, sticky='NEWS', pady=5, padx=10)
+        self.wrap_frame = ttk.Canvas(self)
+        scrollbar = ttk.Scrollbar(self, bootstyle="primary", orient='vertical', command=self.wrap_frame.yview)
+        self.wrap_frame.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(fill=Y, side=RIGHT)
+        self.wrap_frame.pack(fill=BOTH, expand=True, side=TOP, anchor=NW)
+
+        for index, (text, attributes) in enumerate(self.ui_config['label_frames']):  # Make the label frames for the inputs and filling them
+            frame = ttk.Labelframe(self, text=text, padding=5)
+            self.frames.append(frame)
+            self.frame_tags.append(self.wrap_frame.create_window(1, 1, anchor='nw', window=frame))
 
             for i, attribute in enumerate(attributes):
                 if attribute == 'generation_info':
-                    self.info = GeneratorInfoWidget(frames[-1], cols=4)
+                    self.info = GeneratorInfoWidget(self.frames[-1])
+                    self.info.grid(row=0, column=0, sticky='NEWS', pady=2, padx=2)
                     break
                 _, widget, label, options, active, tooltip = self.ui_config['attributes'][attribute]
 
                 if widget == 4:
-                    self.inputs['vanilla_nations'] = VanillaNationWidget(frames[-1], cols=7)
+                    self.inputs['vanilla_nations'] = VanillaNationWidget(self.frames[-1])
                 elif widget == 5:
-                    self.inputs['custom_nations'] = CustomGenericNationWidget(frames[-1], cols=7)
+                    self.inputs['custom_nations'] = CustomGenericNationWidget(self.frames[-1])
                 elif widget == 6:
-                    self.inputs[attribute] = IllwinterDropdownWidget(frames[-1], attribute)
-                    self.inputs[attribute].grid(row=i, column=0, sticky='NEWS', pady=5, padx=10, rowspan=2)
+                    self.inputs[attribute] = IllwinterDropdownWidget(self.frames[-1], attribute)
                 elif widget == 7:
-                    self.inputs[attribute] = TerrainWidget(frames[-1], cols=4)
+                    self.inputs[attribute] = TerrainWidget(self.frames[-1])
                 else:
                     state = ttk.NORMAL
                     if not active:
-                        state = ttk.DISABLED
-                    row, col = i // self.cols, self.cols * (i % self.cols)
+                        state = ttk.READONLY
 
-                    self.labels[attribute] = ttk.Label(frames[-1], text=label, justify=ttk.CENTER, anchor="e")
-                    self.labels[attribute].grid(row=row, column=col, sticky='NEWS', pady=5, padx=5)
+                    miniframe = ttk.Frame(self.frames[-1])
+                    miniframe.columnconfigure(0, weight=1, minsize=100)
+                    miniframe.columnconfigure(1, weight=1, minsize=100)
+
+                    self.labels[attribute] = ttk.Label(miniframe, text=label, justify=ttk.CENTER, anchor='e')
+                    self.labels[attribute].grid(row=0, column=0, sticky='NEWS', pady=2, padx=2)
                     ToolTip(self.labels[attribute], text=tooltip, delay=TOOLTIP_DELAY)
 
                     if widget == 0:
-                        self.inputs[attribute] = ttk.Entry(frames[-1], textvariable=ttk.StringVar(), state=state)
+                        self.inputs[attribute] = ttk.Entry(miniframe, textvariable=ttk.StringVar())
+                        self.inputs[attribute].configure(state=state)
                     elif widget == 1:
-                        self.inputs[attribute] = ttk.Combobox(frames[-1], values=options, textvariable=ttk.StringVar(), state=ttk.READONLY)
+                        self.inputs[attribute] = ttk.Combobox(miniframe, values=options, textvariable=ttk.StringVar(), state=ttk.READONLY)
                         self.inputs[attribute].set(options[0])
                     elif widget == 2:
-                        self.inputs[attribute] = EntryScaleWidget(frames[-1], variable=ttk.IntVar(), from_=options[0], to=options[1], state=state)
+                        self.inputs[attribute] = EntryScaleWidget(miniframe, variable=ttk.IntVar(), from_=options[0], to=options[1], state=state)
                         self.inputs[attribute].set(options[0])
                     elif widget == 3:
                         self.variables[attribute] = ttk.IntVar()
                         if attribute == 'disciples':
-                            self.inputs[attribute] = ttk.Checkbutton(frames[-1], bootstyle="primary-round-toggle", variable=self.variables[attribute], state=state, command=self.update_disciples)
+                            self.inputs[attribute] = ttk.Checkbutton(miniframe, bootstyle="primary-round-toggle", variable=self.variables[attribute], command=self.update_disciples)
+                            self.inputs[attribute].configure(state=state)
                         else:
-                            self.inputs[attribute] = ttk.Checkbutton(frames[-1], bootstyle="primary-round-toggle", variable=self.variables[attribute], state=state)
+                            self.inputs[attribute] = ttk.Checkbutton(miniframe, bootstyle="primary-round-toggle", variable=self.variables[attribute])
+                            self.inputs[attribute].configure(state=state)
 
-                    if attribute == 'description':
-                        self.inputs[attribute].grid(row=row, column=1+col, sticky='NEWS', pady=5, padx=10, columnspan=4, rowspan=2)
-                    else:
-                        self.inputs[attribute].grid(row=row, column=1+col, sticky='NEWS', pady=5, padx=10)
+                self.inputs[attribute].grid(row=0, column=1, sticky='NEWS', pady=2, padx=2)
 
                 ToolTip(self.inputs[attribute], text=tooltip, delay=TOOLTIP_DELAY)
 
         if len(self.ui_config['buttons']) > 0:
             button_frame = ttk.Frame(self, bootstyle='primary')
-            button_frame.grid(row=len(frames), column=0, sticky='NEWS')
+            button_frame.pack(fill=X, expand=False, side=BOTTOM, anchor=SW)
 
             for index, button in enumerate(self.ui_config['buttons']):
-                ttk.Button(button_frame, bootstyle='primary', text=self.BUTTONS[button][0], command=self.BUTTONS[button][1]).grid(row=0, column=index, sticky='WE')
-                button_frame.grid_columnconfigure(index, weight=1)
+                ttk.Button(button_frame, bootstyle='primary', text=self.BUTTONS[button][0], command=self.BUTTONS[button][1]).pack(fill=X, expand=True, side='left')
 
     def update_disciples(self):
         disciples = self.variables['disciples'].get()
@@ -120,11 +169,11 @@ class InputWidget(ttk.Frame):
             if active:
                 if widget == 0:
                     setattr(self.target_class, attribute, attribute_type(self.inputs[attribute].get()))
-                if widget == 1:
+                elif widget == 1:
                     setattr(self.target_class, attribute, attribute_type(options.index(self.inputs[attribute].get())))
-                if widget == 2:
+                elif widget == 2:
                     setattr(self.target_class, attribute, attribute_type(self.inputs[attribute].get()))
-                if widget == 3:
+                elif widget == 3:
                     setattr(self.target_class, attribute, attribute_type(self.variables[attribute].get()))
                 elif widget == 4:
                     self.target_class.age = AGES.index(self.inputs[attribute].age.get())
@@ -132,17 +181,24 @@ class InputWidget(ttk.Frame):
                 elif widget == 5:
                     self.target_class.custom_nations = self.inputs['custom_nations'].custom_nation_list
                     self.target_class.generic_nations = self.inputs['custom_nations'].generic_nation_list
+                elif widget == 6:
+                    setattr(self.target_class, attribute, attribute_type(self.inputs[attribute].get()))
                 elif widget == 7:
-                    self.target_class.cap_terrain = int(self.inputs['cap_terrain'].terrain_int.get())
+                    self.target_class.terrain_int = int(self.inputs['terrain_int'].terrain_int.get())
 
     def class_2_input(self):
         for attribute in self.ui_config['attributes']:
-            attribute_type, widget, _, options, __, ___ = self.ui_config['attributes'][attribute]
+            attribute_type, widget, _, options, active, ___ = self.ui_config['attributes'][attribute]
 
             if getattr(self.target_class, attribute) is not None:
+
                 if widget == 0:
+                    self.inputs[attribute].configure(state=ttk.NORMAL)
                     self.inputs[attribute].delete(0, END)
                     self.inputs[attribute].insert(1, str(getattr(self.target_class, attribute)))
+                    if not active:
+                        self.inputs[attribute].configure(state=ttk.READONLY)
+
                 elif widget == 1:
                     self.inputs[attribute].set(options[getattr(self.target_class, attribute)])
                 elif widget == 2:
@@ -157,6 +213,13 @@ class InputWidget(ttk.Frame):
                     self.inputs[attribute].custom_nation_list = getattr(self.target_class, 'custom_nations')
                     self.inputs[attribute].generic_nation_list = getattr(self.target_class, 'generic_nations')
                     self.inputs[attribute].update(disciples=getattr(self.target_class, 'disciples'))
+                elif widget == 6:
+                    self.inputs[attribute].set(self.inputs[attribute].set_dict[getattr(self.target_class, attribute)])
+                elif widget == 7:
+                    self.inputs[attribute].terrain_int.set(getattr(self.target_class, 'terrain_int'))
+                    self.inputs[attribute].update(cols=self.cols*2, set_terrain=getattr(self.target_class, 'terrain_int'))
+
+
 
     def input_2_list(self):
         input_list = list()
@@ -202,23 +265,23 @@ class InputWidget(ttk.Frame):
 
     def clear(self):
         self.destroy()
-        self.__init__(self.master, self.ui_config, self.cols, target_class=self.target_class)
+        self.__init__(self.master, self.ui_config, target_class=self.target_class)
         self.class_2_input()
 
 
 class VanillaNationWidget(ttk.Frame):
 
-    def __init__(self, master, cols):
+    def __init__(self, master):
 
         self.master = master
-        self.cols = cols
+        self.cols = 4
         super().__init__(master=master)
         self.grid(sticky='NEWS')
 
         self.age = ttk.StringVar()
         self.age.set(AGES[0])
 
-        self.age_selection = ttk.Combobox(self, values=AGES, textvariable=self.age, bootstyle="light", width=7)
+        self.age_selection = ttk.Combobox(self, values=AGES, textvariable=self.age, bootstyle="light", width=7, state=ttk.READONLY)
         self.age_selection.grid(row=0, column=0, sticky='NEWS', pady=2, padx=2)
         self.age_selection.bind("<<ComboboxSelected>>", lambda x: self.update())
 
@@ -227,17 +290,21 @@ class VanillaNationWidget(ttk.Frame):
         self.disciples = 0
         self.options = None
         self.variables = None
+        self.teams = None
         self.miniframes = list()
 
         self.update()
 
-    def update(self, disciples=None):
+    def update(self, disciples=None, cols=None):
 
         if disciples is not None:
             self.disciples = disciples
+        if cols is not None:
+            self.cols = cols
 
         self.options = dict()
         self.variables = dict()
+        self.teams = dict()
 
         for frame in self.miniframes:
             for widget in frame.winfo_children():
@@ -250,13 +317,13 @@ class VanillaNationWidget(ttk.Frame):
         for i, entry in enumerate(AGE_NATIONS[age]):
             self.miniframes.append(ttk.Frame(self))
             self.miniframes[-1].grid(row=1 + i // self.cols, column=i % self.cols, sticky='WE', pady=2, padx=2)
-
             self.variables[entry[0]] = ttk.IntVar()
             self.options[entry[0]] = ttk.Checkbutton(self.miniframes[-1], text=entry[1], bootstyle="primary-outline-toolbutton", variable=self.variables[entry[0]])
             self.options[entry[0]].grid(row=0, column=0, sticky='WE')
 
             if self.disciples:
-                xj = ttk.Combobox(self.miniframes[-1], values=TEAMS, textvariable=ttk.StringVar(), justify=ttk.CENTER, bootstyle="primary-outline-toolbutton", width=2)
+                self.teams[entry[0]] = ttk.StringVar()
+                xj = ttk.Combobox(self.miniframes[-1], values=TEAMS, textvariable=self.teams[entry[0]], justify=ttk.CENTER, bootstyle="primary-outline-toolbutton", width=2)
                 xj.grid(row=0, column=1, sticky='WE')
                 self.miniframes[-1].columnconfigure(1, weight=1, minsize=20)
                 xj.set(TEAMS[0])
@@ -265,9 +332,9 @@ class VanillaNationWidget(ttk.Frame):
                 if entry[0] == nation:
                     self.options[entry[0]].invoke()
                     if self.disciples:
-                        xj.set(team)
+                        self.teams[entry[0]].set(team)
 
-            self.miniframes[-1].columnconfigure(0, weight=4, minsize=80)
+            self.miniframes[-1].columnconfigure(0, weight=4, minsize=70)
 
         for i in range(self.cols):
             self.columnconfigure(i, minsize=120)
@@ -277,15 +344,18 @@ class VanillaNationWidget(ttk.Frame):
         for i, entry in enumerate(AGE_NATIONS[AGES.index(self.age.get())]):
 
             if self.variables[entry[0]].get():
-                nation_list.append([entry[0], 1])
+                team = 0
+                if self.disciples:
+                    team = int(self.teams[entry[0]].get())
+
+                nation_list.append([entry[0], team])
         return nation_list
 
 
 class CustomGenericNationWidget(ttk.Frame):
 
-    def __init__(self, master, cols):
-        self.master = master
-        self.cols = cols
+    def __init__(self, master):
+        self.cols = 4
         super().__init__(master=master)
         self.grid(sticky='NEWS')
         self.nation_inputs = dict()
@@ -295,17 +365,19 @@ class CustomGenericNationWidget(ttk.Frame):
         self.disciples = 0
         self.miniframes = list()
 
-        add_custom = ttk.Button(self, bootstyle='primary-outline', text='Add Custom Nation', command=lambda: InputToplevel(self, 'Add Custom Nation', UI_CONFIG_CUSTOMNATION, 1, target_location=self.custom_nation_list, parent_widget=self))
+        add_custom = ttk.Button(self, bootstyle='primary-outline', text='Add Custom Nation', command=lambda: InputToplevel(self, 'Add Custom Nation', UI_CONFIG_CUSTOMNATION, 1, target_location=self.custom_nation_list, parent_widget=self, geometry="500x550"))
         add_custom.grid(row=0, column=0)
-        add_generic = ttk.Button(self, bootstyle='primary-outline', text='Add Generic Start', command=lambda: InputToplevel(self, 'Add Generic Start', UI_CONFIG_GENERICNATION, 1, target_location=self.generic_nation_list, parent_widget=self))
+        add_generic = ttk.Button(self, bootstyle='primary-outline', text='Add Generic Start', command=lambda: InputToplevel(self, 'Add Generic Start', UI_CONFIG_GENERICNATION, 1, target_location=self.generic_nation_list, parent_widget=self, geometry="400x450"))
         add_generic.grid(row=0, column=1)
 
         self.update()
 
-    def update(self, disciples=None):
+    def update(self, disciples=None, cols=None):
 
         if disciples is not None:
             self.disciples = disciples
+        if cols is not None:
+            self.cols = cols
 
         for frame in self.miniframes:
             for widget in frame.winfo_children():
@@ -358,11 +430,10 @@ class EntryScaleWidget(ttk.Frame):
         self.master = master
         self.variable = variable
         super().__init__(master=master)
-        self.grid()
         self.entry = ttk.Entry(self, state=state, width=3, textvariable=self.variable, justify=ttk.CENTER)
-        self.scale = ttk.Scale(self, orient=ttk.HORIZONTAL, variable=variable, from_=from_, to=to, length=140, state=state, command=self.slider_callback)
-        self.entry.grid(row=0, column=0, sticky='NEWS', pady=2)
-        self.scale.grid(row=0, column=1, sticky='NEWS', padx=5, pady=2)
+        self.scale = ttk.Scale(self, orient=ttk.HORIZONTAL, variable=variable, from_=from_, to=to, length=120, state=state, command=self.slider_callback)
+        self.entry.pack(fill='both', expand=False, side='left')
+        self.scale.pack(fill='both', expand=False, side='left')
 
     def slider_callback(self, event):
         self.variable.set(str(int(float(self.variable.get()))))
@@ -376,36 +447,43 @@ class EntryScaleWidget(ttk.Frame):
 
 class TerrainWidget(ttk.Frame):
 
-    def __init__(self, master, cols):
-        self.master = master
+    def __init__(self, master):
         super().__init__(master=master)
-        self.grid()
 
+        self.cols = 8
         self.terrain_int = ttk.IntVar()
-        ttk.Label(self, text='Terrain Integer', anchor="e").grid(row=0, column=0, sticky='NEWS', pady=5, padx=5)
-        ttk.Entry(self, textvariable=self.terrain_int, state=ttk.READONLY).grid(row=0, column=1, sticky='NEWS', pady=5, padx=5)
+        ttk.Label(self, text='Terrain Integer', anchor="e").grid(row=0, column=0, sticky='NEWS', pady=2, padx=2)
+        ttk.Entry(self, textvariable=self.terrain_int, state=ttk.READONLY).grid(row=0, column=1, sticky='NEWS', pady=2, padx=2)
 
         self.options = dict()
         self.variables = dict()
         for i, (power, terrain_int, text) in enumerate(TERRAIN_PRIMARY):
             self.variables[i] = ttk.IntVar()
             self.options[i] = ttk.Checkbutton(self, text=text, bootstyle="primary-outline-toolbutton", variable=self.variables[i], command=self.update)
-            self.options[i].grid(row=1 + i // cols, column=i % cols, sticky='WE', pady=2, padx=2)
 
-    def update(self):
-        terrain_int = 0
-        for i, button in enumerate(self.options):
-            if self.variables[i].get():
-                terrain_int += TERRAIN_PRIMARY[i][1]
-        self.terrain_int.set(terrain_int)
+    def update(self, cols=None, set_terrain=None):
+
+        if cols is not None:
+            self.cols = cols
+
+        if set_terrain is None:
+            terrain_int = 0
+            for i, button in enumerate(self.options):
+                self.options[i].grid(row=1 + i // self.cols, column=i % self.cols, sticky='NEWS', pady=2, padx=2)
+                if self.variables[i].get():
+                    terrain_int += TERRAIN_PRIMARY[i][1]
+            self.terrain_int.set(terrain_int)
+        else:
+            for i, button in enumerate(self.options):
+                if has_terrain(set_terrain, TERRAIN_PRIMARY[i][1]):
+                    self.variables[i].set(1)
+            self.terrain_int.set(set_terrain)
 
 
 class IllwinterDropdownWidget(ttk.Frame):
 
-    def __init__(self, master, data_type):
-        self.master = master
+    def __init__(self, master, data_type, initial_entry=None):
         super().__init__(master=master)
-        self.grid()
 
         options = {
             'victory_type': ['Victory Conditions', VICTORY_CONDITIONS],
@@ -417,33 +495,42 @@ class IllwinterDropdownWidget(ttk.Frame):
         text, data = options[data_type]
         entries = [['-']]
         self.get_dict = {'-': None}
+        self.set_dict = {None: '-'}
 
         for i, j in data:
             entries.append(j)
             self.get_dict[j] = i
+            self.set_dict[i] = j
 
-        ttk.Label(self, text=text).grid(row=0, column=0, sticky='NEWS', pady=5, padx=5, anchor="e")
+        ttk.Label(self, text=text, anchor="e").grid(row=0, column=0, sticky='NEWS', pady=2, padx=2)
 
         self.variable = ttk.StringVar()
         self.input = ttk.Combobox(self, values=entries, textvariable=self.variable, state=ttk.READONLY)
-        self.input.grid(row=0, column=1, sticky='NEWS', pady=5, padx=5)
+        self.input.grid(row=0, column=1, sticky='NEWS', pady=2, padx=2)
+
         self.input.set(entries[0])
+        if initial_entry is not None:
+            self.input.set(initial_entry)
+
+        self.columnconfigure(0, weight=1, minsize=100)
+        self.columnconfigure(1, weight=1, minsize=100)
+
+    def set(self, index):
+        self.variable.set(index)
 
     def get(self):
-        return self.get_dict[self.variable]
+        return self.get_dict[self.variable.get()]
 
 
 class GeneratorInfoWidget(ttk.Frame):
 
-    def __init__(self, master, cols):
+    def __init__(self, master):
         super().__init__(master=master)
-        self.grid()
 
         self.labels = dict()
         self.variables = dict()
         self.metrics = dict()
-
-        ttk.Button(self, text='Refresh', command=self.refresh).grid(row=0, column=0, sticky='NEWS', pady=5, padx=5)
+        self.cols = None
 
         GENERATOR_INFO = [['Number of provinces', 'text'],
                           ['Number of water provinces', 'text'],
@@ -453,67 +540,83 @@ class GeneratorInfoWidget(ttk.Frame):
 
         for i, (text, tooltip) in enumerate(GENERATOR_INFO):
 
-            row, col = 1 + i // cols, cols * (i % cols)
-            self.labels[i] = ttk.Label(self, text=text, justify=ttk.RIGHT, anchor="e")
-            self.labels[i].grid(row=row, column=col, sticky='NEWS', pady=5, padx=5)
+            self.labels[i] = ttk.Label(self, text=text)
 
             self.variables[i] = ttk.StringVar()
-            self.metrics[i] = ttk.Entry(self,  width=6, textvariable=self.variables[i], justify=ttk.CENTER)
-            self.metrics[i].grid(row=row, column=col+1, sticky='NEWS', pady=5, padx=5)
+            self.metrics[i] = ttk.Entry(self,  width=50, textvariable=self.variables[i], justify=ttk.CENTER)
 
             ToolTip(self.labels[i], text=tooltip, delay=TOOLTIP_DELAY)
 
-        self.labels[i+1] = ttk.Label(self, text='Input Issues?', justify=ttk.RIGHT, anchor="e")
-        self.labels[i+1].grid(row=row+1, column=0, sticky='NEWS', pady=5, padx=5)
+        self.labels[i+1] = ttk.Label(self, text='Input Issues?')
+        self.metrics[i+1] = ttk.Entry(self, justify=ttk.CENTER, width=100)
+        self.update(2)
+        self.thread = Thread(target=self.check_values)
+        self.thread.daemon = True
+        self.thread.start()
 
-        self.metrics[i+1] = ttk.Entry(self)
-        self.metrics[i+1].grid(row=row+1, column=1, sticky='NEWS', pady=5, padx=5, columnspan=cols*3-1)
+    def update(self, cols):
 
-    def refresh(self):
+        if self.cols != cols:
+            for i in range(5):
+                self.labels[i].grid(row=i, column=0, sticky='NEWS', pady=2, padx=2)
+                self.metrics[i].grid(row=i, column=1, sticky='NEWS', pady=2, padx=2)
 
-        settings_dict = self.master.master.inputs
-        num_players = len(settings_dict['vanilla_nations'].get()) + len(settings_dict['custom_nations'].custom_nation_list) + len(settings_dict['custom_nations'].generic_nation_list)
-        if num_players == 0:
-            num_players = 1
-        water_provs = settings_dict['water_region_num'].get() * REGION_WATER_INFO[WATER_REGIONS.index(settings_dict['water_region_type'].get())][2] + 0.05 * num_players * settings_dict['periphery_size'].get() * settings_dict['player_neighbours'].get()
-        cave_provs = settings_dict['cave_region_num'].get() * REGION_CAVE_INFO[CAVE_REGIONS.index(settings_dict['cave_region_type'].get())][2]
-        num_provs = num_players * settings_dict['homeland_size'].get() + 0.5 * num_players * settings_dict['periphery_size'].get() * settings_dict['player_neighbours'].get() + settings_dict['throne_region_num'].get() + settings_dict['water_region_num'].get() * REGION_WATER_INFO[WATER_REGIONS.index(settings_dict['water_region_type'].get())][2] + cave_provs
-        provs_per_player = num_provs / num_players
-        gold_per_player = 300 + AGE_POPULATION_MODIFIERS[AGES.index(settings_dict['vanilla_nations'].age.get())] * 100 * num_provs / num_players
+            self.labels[i+1].grid(row=i+1, column=0, sticky='NEWS', pady=2, padx=2)
+            self.metrics[i+1].grid(row=i+1, column=1, sticky='NEWS', pady=2, padx=2)
+            self.columnconfigure(0, weight=1, minsize=150)
+            self.columnconfigure(0, weight=1, minsize=200)
 
-        def error_check():
-            message = ''
-            error = False
-            if settings_dict['homeland_size'].get() <= settings_dict['cap_connections'].get():
-                message += 'Error: Homeland size must be greater than cap connections  '
-                error = True
-            if [num_players, settings_dict['player_neighbours'].get()] in NOT_AVAILABLE_GRAPHS:
-                message += 'Error: Invalid combination of players and neighbours  '
-                error = True
-            if error:
-                return message
-            else:
-                return 'You\'re good'
+        self.cols = cols
 
-        for i, j in enumerate(self.metrics):
-            entry = self.metrics[j]
+    def check_values(self):
 
-            if i == 0:
-                entry.delete(0, END)
-                entry.insert(1, str(num_provs))
-            elif i == 1:
-                entry.delete(0, END)
-                entry.insert(1, str(water_provs))
-            elif i == 2:
-                entry.delete(0, END)
-                entry.insert(1, str(cave_provs))
-            elif i == 3:
-                entry.delete(0, END)
-                entry.insert(1, str(provs_per_player))
-            elif i == 4:
-                entry.delete(0, END)
-                entry.insert(1, str(gold_per_player))
-            elif i == 5:
-                message = error_check()
-                entry.delete(0, END)
-                entry.insert(1, str(message))
+        while True:
+
+            settings_dict = self.master.master.inputs
+            num_players = len(settings_dict['vanilla_nations'].get()) + len(settings_dict['custom_nations'].custom_nation_list) + len(settings_dict['custom_nations'].generic_nation_list)
+            if num_players == 0:
+                num_players = 1
+            water_provs = settings_dict['water_region_num'].get() * REGION_WATER_INFO[WATER_REGIONS.index(settings_dict['water_region_type'].get())][2] + 0.05 * num_players * settings_dict['periphery_size'].get() * settings_dict['player_neighbours'].get()
+            cave_provs = settings_dict['cave_region_num'].get() * REGION_CAVE_INFO[CAVE_REGIONS.index(settings_dict['cave_region_type'].get())][2]
+            num_provs = num_players * settings_dict['homeland_size'].get() + 0.5 * num_players * settings_dict['periphery_size'].get() * settings_dict['player_neighbours'].get() + settings_dict['throne_region_num'].get() + settings_dict['water_region_num'].get() * REGION_WATER_INFO[WATER_REGIONS.index(settings_dict['water_region_type'].get())][2] + cave_provs
+            provs_per_player = num_provs / num_players
+            gold_per_player = 300 + AGE_POPULATION_MODIFIERS[AGES.index(settings_dict['vanilla_nations'].age.get())] * 100 * num_provs / num_players
+
+            def error_check():
+                message = ''
+                error = False
+                if settings_dict['homeland_size'].get() <= settings_dict['cap_connections'].get():
+                    message += 'Error: Homeland size must be greater than cap connections  '
+                    error = True
+                if [num_players, settings_dict['player_neighbours'].get()] in NOT_AVAILABLE_GRAPHS:
+                    message += 'Error: Invalid combination of players and neighbours  '
+                    error = True
+                if error:
+                    return message
+                else:
+                    return 'You\'re good'
+
+            for i, j in enumerate(self.metrics):
+                entry = self.metrics[j]
+
+                if i == 0:
+                    entry.delete(0, END)
+                    entry.insert(1, str(num_provs))
+                elif i == 1:
+                    entry.delete(0, END)
+                    entry.insert(1, str(water_provs))
+                elif i == 2:
+                    entry.delete(0, END)
+                    entry.insert(1, str(cave_provs))
+                elif i == 3:
+                    entry.delete(0, END)
+                    entry.insert(1, str(provs_per_player))
+                elif i == 4:
+                    entry.delete(0, END)
+                    entry.insert(1, str(gold_per_player))
+                elif i == 5:
+                    message = error_check()
+                    entry.delete(0, END)
+                    entry.insert(1, str(message))
+
+            time.sleep(1)

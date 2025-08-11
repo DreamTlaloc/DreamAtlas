@@ -7,14 +7,25 @@ def minkowski(v, p, ip):
     return (abs(v[0]) ** p + abs(v[1]) ** p) ** ip
 
 
+@njit(fastmath=True, cache=True)
+def tlalocean(u, v):
+    r1 = u[0] - v[0]
+    r2 = u[1] - v[1]
+    r3 = u[2] - v[2]
+    return (2 - (np.sign(u[2]) * np.sign(v[2]))) * (r1 * r1 + r2 * r2 + r3 * r3) ** 0.5
+
+
+@njit(fastmath=True, cache=True)
+def euclidean_2d(v):
+    return (v[0] * v[0] + v[1] * v[1]) ** 0.5
+
+
 @njit(parallel=True, cache=True, fastmath=True)
 def _jump_flood_algorithm(pixel_matrix: np.array,
+                          noise_matrix: np.array,
                           step_size: int,
-                          shape_array: np.array,
                           distance_matrix: np.array,
-                          vector_matrix: np.array,
-                          hwrap: bool = True,
-                          vwrap: bool = True):
+                          vector_matrix: np.array):
 
     shape_x, shape_y = np.shape(pixel_matrix)
 
@@ -44,14 +55,9 @@ def _jump_flood_algorithm(pixel_matrix: np.array,
                     if p == q or q == 0:
                         continue
                     else:
-                        q_vector = np.subtract(ping_vector_matrix[rx, ry], n)
-                        # q_dist = np.linalg.norm(q_vector, ord=shape_array[q-1])
-                        q_dist = minkowski(q_vector, shape_array[q-1, 0], shape_array[q-1, 1])
-                        if p == 0:  # if our pixel is empty, populate it with q
-                            pong_distance_matrix[x, y] = q_dist
-                            pong_vector_matrix[x, y] = q_vector
-                            pong_matrix[x, y] = q
-                        elif ping_distance_matrix[x, y] > q_dist:  # if our pixel is not empty, see if q is closer than p and if so populate it with q
+                        q_vector = ping_vector_matrix[rx, ry] - n  # q_vector is the vector from the ping pixel to the q pixel
+                        q_dist = euclidean_2d(q_vector - noise_matrix[x, y])  # q_dist is the distance from the ping pixel to the q pixel
+                        if p == 0 or ping_distance_matrix[x, y] > q_dist:  # if our pixel is empty or closer to q, populate it with q
                             pong_distance_matrix[x, y] = q_dist
                             pong_vector_matrix[x, y] = q_vector
                             pong_matrix[x, y] = q
@@ -71,10 +77,8 @@ def _jump_flood_algorithm(pixel_matrix: np.array,
 
 def find_pixel_ownership(coordinates_array: np.array,
                          map_size: np.array,
-                         shapes: dict,
-                         hwrap: bool = True,
-                         vwrap: bool = True,
-                         scale_down: int = 8):
+                         noise_array: np.array = np.array,
+                         scale_down: int = 2):
     # Runs a jump flood algorithm on a scaled down version of the map, then scales up and redoes the algorithm more
     # finely. This speeds up runtime significantly. The main function of the JFA is run in Numba, which speeds up the
     # code and allows it to be run in parallel on CPU or GPU.
@@ -82,26 +86,23 @@ def find_pixel_ownership(coordinates_array: np.array,
     small_x_size = int(map_size[0] / scale_down)
     small_y_size = int(map_size[1] / scale_down)
     small_matrix = np.zeros((small_x_size, small_y_size), dtype=np.uint16)
-    dict_size = len(coordinates_array)
 
-    shape_array = np.full((dict_size, 2), 2, dtype=np.float32)
     s_distance_matrix = np.full((small_x_size, small_y_size), np.inf, dtype=np.float32)
     s_vector_matrix = np.zeros((small_x_size, small_y_size, 2), dtype=np.float32)
+    small_noise_array = np.zeros((small_x_size, small_y_size, 2), dtype=np.float32)
+    # small_noise_array = noise_array[::scale_down, ::scale_down, :] / scale_down
 
     for i, (x, y) in enumerate(coordinates_array):
         x_small = int((x / scale_down) % small_x_size)
         y_small = int((y / scale_down) % small_y_size)
         small_matrix[x_small, y_small] = i+1
         s_distance_matrix[x_small, y_small] = 0
-        shape_array[i] = shapes[i+1]
 
     small_output_matrix, small_distance_matrix, small_vector_matrix = _jump_flood_algorithm(small_matrix,
+                                                                                            noise_matrix=small_noise_array,
                                                                                             step_size=2 ** (int(1 + np.log(max(map_size) / scale_down))),
-                                                                                            shape_array=shape_array,
                                                                                             distance_matrix=s_distance_matrix,
-                                                                                            vector_matrix=s_vector_matrix,
-                                                                                            hwrap=hwrap,
-                                                                                            vwrap=vwrap)
+                                                                                            vector_matrix=s_vector_matrix)
 
     # Scale the matrix back up and run a JFA again to refine
     zoom = np.divide(map_size, small_output_matrix.shape)
@@ -113,14 +114,13 @@ def find_pixel_ownership(coordinates_array: np.array,
         x_final = int((map_size[0] + x) % map_size[0])
         y_final = int((map_size[1] + y) % map_size[1])
         final_matrix[x_final, y_final] = i+1
+        noise_array[x_final, y_final] = np.zeros(2, dtype=np.float32)  # Reset the noise array for the final matrix
 
     final_matrix, _, __ = _jump_flood_algorithm(final_matrix,
-                                                step_size=2 ** (int(np.log(max(map_size)))),
-                                                shape_array=shape_array,
+                                                noise_matrix=noise_array,
+                                                step_size=2 ** (1 + int(np.log(max(map_size)))),
                                                 distance_matrix=final_distance_matrix,
-                                                vector_matrix=final_vector_matrix,
-                                                hwrap=hwrap,
-                                                vwrap=vwrap)
+                                                vector_matrix=final_vector_matrix)
 
     return final_matrix
 
@@ -217,7 +217,7 @@ def pixel_matrix_2_borders_array(pixel_matrix, thickness=1):
 
 
 @njit(parallel=True, cache=True)
-def _numba_height_map(pixel_map, height_array):
+def numba_height_map(pixel_map, height_array):
     height_map = np.zeros(pixel_map.shape, dtype=np.int16)
 
     for x in prange(pixel_map.shape[0]):
