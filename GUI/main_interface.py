@@ -166,9 +166,9 @@ class MainInterface(ttk.Frame):
                             self.focus = self.map.province_list[self.current_plane][i-1]
                             break
                 elif 'connections' in self.viewing_canvas.gettags(tag):
-                    for (i, j), iid in self.viewing_connections[self.current_plane]:
+                    for connection, iid in self.viewing_connections[self.current_plane]:
                         if iid == tag[0]:
-                            self.focus = Connection((i, j), 0)
+                            self.focus = connection
                             break
 
             self.update_editor_panel()
@@ -293,15 +293,15 @@ class MainInterface(ttk.Frame):
                         j = int(j)
 
                         neighbour_col = CONNECTION_COLOURS[0]
-                        for k, l, spec in self.map.layout.special_neighbours[plane]:
-                            if {i+1, j+1} == {k, l}:
-                                neighbour_col = CONNECTION_COLOURS[spec]
+                        for connection in self.map.connection_list[plane]:
+                            if {i+1, j+1} == connection.connected_provinces:
+                                neighbour_col = CONNECTION_COLOURS[connection.connection_int]
                                 break
 
                         if j not in done_nodes:
                             x2, y2 = virtual_coordinates[j]
                             iid = self.viewing_canvas.create_line(x1, self.map.map_size[plane][1]-y1, x2, self.map.map_size[plane][1]-y2, state=ttk.HIDDEN, dash=(100, 15), activefill='white', fill=neighbour_col, tags=(f'plane{plane}', f'{(i+1, j+1)}', 'connections', 'clickable'), width=6)
-                            self.viewing_connections[plane].append([(i+1, j+1), iid])
+                            self.viewing_connections[plane].append([connection, iid])
 
                     if i < self.map.layout.province_graphs[plane].size:
                         iid = self.viewing_canvas.create_oval(x1-12, self.map.map_size[plane][1]-(y1-12), x1+12, self.map.map_size[plane][1]-(y1+12), state=ttk.HIDDEN, activefill='white', fill='red', tags=(f'plane{plane}', f'{i+1}', 'nodes', 'clickable'), width=3)

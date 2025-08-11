@@ -112,8 +112,7 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
 
     for plane in map_class.planes:
         layout.generate_province_layout(province_list[plane], plane=plane)
-        layout.generate_neighbours(plane=plane)
-        layout.generate_special_neighbours(plane=plane)
+        layout.generate_connections(plane=plane)
     layout.generate_gates(region_list=region_list)
 
     # Check to add omni here
@@ -144,9 +143,8 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
 
     map_class.special_start_locations = special_start_locations
     map_class.terrain_list = terrain_list
-    map_class.neighbour_list = layout.neighbours
+    map_class.connection_list = layout.connections
     map_class.min_dist = layout.min_dist
-    map_class.special_neighbour_list = layout.special_neighbours
     map_class.gate_list = layout.gates
     map_class.layout = layout
 

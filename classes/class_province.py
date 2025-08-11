@@ -20,7 +20,7 @@ class Province:
                  fort: int = None,
                  temple: bool = False,
                  lab: bool = False,
-                 unrest: int = None,
+                 unrest: int = 0,
                  population: int = None,
                  defence: int = None,
                  skybox: str = None,

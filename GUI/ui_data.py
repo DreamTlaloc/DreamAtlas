@@ -5,7 +5,7 @@ UI_CONFIG_CONNECTION = {
     'label_frames': [['Connection', ['connected_provinces', 'connection_int']]],
     'buttons': [0, 5],
     'attributes': {
-        'connected_provinces': [tuple[int, int], 0, 'Connected Provinces', None, 1, 'Enter the IDs of connected provinces'],
+        'connected_provinces': [tuple[int, int], 0, 'Connected Provinces', None, 0, 'Enter the IDs of connected provinces'],
         'connection_int': [int, 6, 'Connection Type', None, 1, 'Select the type of connection between provinces']
     }
 }
@@ -52,7 +52,7 @@ UI_CONFIG_PROVINCE = {
         ['Province attributes', ['killfeatures', 'temple', 'lab']]],
     'buttons': [0, 5],
     'attributes': {
-        'index': [int, 0, 'Province Number', None, 1, 'Enter the unique number for the province'],
+        'index': [int, 0, 'Province Number', None, 0, 'Enter the unique number for the province'],
         'name': [str, 0, 'Province Name', None, 1, 'Enter the name of the province'],
         # 'plane': [int, 0, 'Plane', None, 1, 'Enter the plane ID where the province is located'],
         # 'parent_region': [int, 0, 'Parent Region', None, 1, 'Enter the ID of the parent region'],

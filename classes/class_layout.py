@@ -20,8 +20,7 @@ class DominionsLayout:
         # Province level layout - list per plane
         self.province_graphs = [None for _ in range(10)]
         self.edge_types = [list() for _ in range(10)]
-        self.neighbours = [list() for _ in range(10)]
-        self.special_neighbours = [list() for _ in range(10)]
+        self.connections = [list() for _ in range(10)]
         self.gates = [list() for _ in range(10)]
         self.min_dist = [np.inf for _ in range(10)]
 
@@ -196,50 +195,47 @@ class DominionsLayout:
         self.province_graphs[plane].spring_adjustment()
         self.province_graphs[plane].clean_delaunay_graph()  # Clean the graph with swaps for non-cap provinces
 
-    def generate_neighbours(self, plane: int):
-
-        self.neighbours[plane] = list()
-        done_edges = set()
-        for i, j in self.province_graphs[plane].get_all_connections():
-            if (j, i) not in done_edges:
-                done_edges.add((i, j))
-                self.neighbours[plane].append([i+1, j+1])
-        self.min_dist[plane] = self.province_graphs[plane].get_min_dist()
-
-    def generate_special_neighbours(self,
+    def generate_connections(self,
                                     plane: int,
                                     seed: int = None):
         dibber(self, seed)  # Setting random seed
 
-        if not self.neighbours[plane]:
-            raise Exception('No neighbours')
-        self.special_neighbours[plane] = list()
         index_2_prov = dict()
         for province in self.map.province_list[plane]:
             index_2_prov[province.index] = province
 
-        for i, j in self.neighbours[plane]:  # Randomly assigns special connections
-            i_j_provs = [index_2_prov[i], index_2_prov[j]]
-            choice = int(rd.choices(SPECIAL_NEIGHBOUR, NEIGHBOUR_SPECIAL_WEIGHTS)[0][0])
-            fail = False
-            for index in range(2):
-                ti = i_j_provs[index].terrain_int
-                if i_j_provs[index].capital_location:  # Ignore caps
-                    fail = True
-                elif has_terrain(ti, 68719476736):  # if cave wall
-                    self.special_neighbours[plane].append([i, j, 4])
-                    fail = True
-                elif self.region_types[i_j_provs[index].parent_region.index] == 6:  # if blocker
-                    self.special_neighbours[plane].append([i, j, 36])
-                    fail = True
-                elif has_terrain(ti, 4):
-                    fail = True
-                elif has_terrain(ti, 4096):
-                    fail = True
-                elif (choice == 33 or choice == 36) and not has_terrain(ti, 8388608):
-                    i_j_provs[index].terrain_int += 8388608
-            if not fail and choice != 0:
-                self.special_neighbours[plane].append([i, j, choice])
+        self.connections[plane] = list()
+        done_edges = set()
+        for i, j in self.province_graphs[plane].get_all_connections():
+            if (j, i) not in done_edges:
+                done_edges.add((i, j))
+
+                for province in [index_2_prov[i+1], index_2_prov[j+1]]:
+                    choice = int(rd.choices(SPECIAL_NEIGHBOUR, NEIGHBOUR_SPECIAL_WEIGHTS)[0][0])
+                    terrain = province.terrain_int
+                    if province.capital_location:  # Ignore caps
+                        choice = 0
+                        break
+                    elif has_terrain(terrain, 68719476736):  # if cave wall
+                        choice = 4
+                        break
+                    elif self.region_types[province.parent_region.index] == 6:  # if blocker
+                        choice = 36
+                        break
+                    elif has_terrain(terrain, 4):
+                        choice = 0
+                        break
+                    elif has_terrain(terrain, 4096):
+                        choice = 0
+                        break
+
+                for province in [index_2_prov[i+1], index_2_prov[j+1]]:
+                    if (choice == 33 or choice == 36) and not has_terrain(terrain, 8388608):
+                        province.terrain_int += 8388608
+
+                self.connections[plane].append(Connection(connected_provinces={i+1, j+1}, connection_int=choice))
+
+        self.min_dist[plane] = self.province_graphs[plane].get_min_dist()
 
     def generate_gates(self, region_list, seed: int = None):
         dibber(self, seed)  # Setting random seed
