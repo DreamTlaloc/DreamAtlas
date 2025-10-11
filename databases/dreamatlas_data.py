@@ -156,6 +156,7 @@ HOMELANDS_INFO = [  # Homelands format: [Nation index, terrain preference, layou
     [120, TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 0, 1],           # Piconye
     [121, TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_LAND, 0, 1],          # Andramania
     [123, TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_LAND, 128, 1],        # Pyrene
+    [124, TERRAIN_PREF_FOREST, LAYOUT_PREF_LAND, 128, 1],           # Zemaitia
     [125, TERRAIN_PREF_BALANCED, LAYOUT_PREF_COAST, 0, 1],          # Erytheia
     [126, TERRAIN_PREF_BALANCED, LAYOUT_PREF_COAST, 0, 1],          # Atlantis
     [127, TERRAIN_PREF_BALANCED, LAYOUT_PREF_DEEPS, 2052, 1]        # Ryleh

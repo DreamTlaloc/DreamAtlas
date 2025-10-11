@@ -63,7 +63,7 @@ LA_NATIONS = [
     [113, 'Ctis', 'Desert Tombs'], [115, 'Midgard', 'Age of Men'], [116, 'Bogarus', 'Age of Heroes'],
     [117, 'Utgard', 'Well of Urd'], [118, 'Vaettiheim', 'Wolf Kin Jarldom'], [119, 'Feminie', 'Sage-Queens'],
     [120, 'Piconye', 'Legacy of the Prester King'], [121, 'Andramania', 'Dog Republic'],
-    [123, 'Pyrene', 'Demon Knights'],
+    [123, 'Pyrene', 'Demon Knights'], [124, 'Zemaitia', 'Sylvan Knights'],
     [125, 'Erytheia', 'Kingdom of Two Worlds'], [126, 'Atlantis', 'Frozen Sea'], [127, 'Rlyeh', 'Dreamlands']
 ]
 

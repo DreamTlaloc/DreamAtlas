@@ -257,7 +257,7 @@ class DominionsLayout:
                         break
 
                 for dart in self.province_graphs[plane].darts[i, j]:
-                    if dart != 0:
+                    if dart != 0 and choice != 4:
                         choice = 0
                         break
 

@@ -49,7 +49,7 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
     pixels[1] += PIXELS_PER_PROVINCE * settings.cave_region_num * REGION_CAVE_INFO[settings.cave_region_type][2] * 4
 
     map_class.map_size[1:3] = np.multiply(np.floor_divide(np.outer(np.sqrt(pixels), np.asarray([1, 0.588])), 256), 256).astype(dtype=np.uint32)
-    map_class.wraparound = NEIGHBOURS[settings.wraparound]
+    map_class.wraparound = NEIGHBOURS_FULL
     map_class.scale[1] = min(map_class.map_size[1]) * np.asarray([0.035])
     map_class.scale[2] = min(map_class.map_size[1]) * np.asarray([0.05])
     map_class.planes = [1, 2]
