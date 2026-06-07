@@ -430,13 +430,12 @@ class DominionsMap:
                 location: str = None,
                 name: str = None,
                 art_style: int = 0):
-
-        if location is None:
-            location = f"{ROOT_DIR}/maps//"
         if name is None:
             name = self.map_title
+        if location is None:
+            location = ROOT_DIR.parent / 'maps' / name # ROOT_DIR points to the module itself not the repo
 
-        os.mkdir(location)
+        os.makedirs(location, exist_ok=True)
 
         for plane in self.planes:
             plane_str = '_plane%i' % plane
@@ -444,8 +443,10 @@ class DominionsMap:
                 plane_str = ''
             if art_style == 0:  # d6m art
                 self.image_file[plane] = f'{name}{plane_str}.d6m'  # Make surface
-                self.make_map_file(plane=plane, filepath=location+f'/{name}{plane_str}.map')
-                self.make_d6m(plane=plane, filepath=location+f'/{name}{plane_str}.d6m')
+                #TODO: properly modify everything to use pathlib instead of mixing strings and path objects
+                #I'm gonna be lazy and just hack it this way so it still works.
+                self.make_map_file(plane=plane, filepath=str(location)+f'/{name}{plane_str}.map')
+                self.make_d6m(plane=plane, filepath=str(location)+f'/{name}{plane_str}.d6m')
             else:
                 return Exception("No valid artstyle")
 

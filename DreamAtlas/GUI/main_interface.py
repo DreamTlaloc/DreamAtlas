@@ -65,7 +65,7 @@ class MainInterface(ttk.Frame):
 
         # WIDGET FUNCTIONS
         # BUILD UI
-        major_pane = ttk.PanedWindow(self, orient=ttk.HORIZONTAL)
+        major_pane = ttk.Panedwindow(self, orient=HORIZONTAL)
         major_pane.grid(row=0, column=0, sticky='NEWS')
 
         major_frames = list()  # Build 3 major frames
@@ -88,7 +88,7 @@ class MainInterface(ttk.Frame):
         explorer_frame.grid_rowconfigure(0, weight=1)
 
         self.explorer_panel = ttk.Treeview(explorer_frame, bootstyle="default", show="tree")
-        explorer_scrollbar = ttk.Scrollbar(explorer_frame, bootstyle="primary", orient='vertical', command=self.explorer_panel.yview)
+        explorer_scrollbar = ttk.Scrollbar(explorer_frame, bootstyle="primary", orient=VERTICAL, command=self.explorer_panel.yview)
         self.explorer_panel['yscrollcommand'] = explorer_scrollbar.set
         self.explorer_panel.grid(row=0, column=0, sticky='NEWS')
         explorer_scrollbar.grid(row=0, column=1, sticky='NEWS')
@@ -113,7 +113,7 @@ class MainInterface(ttk.Frame):
             variable = ttk.IntVar()
             tag = DISPLAY_TAGS[i]
             active = DISPLAY_STATES[i]
-            iid = ttk.Checkbutton(display_options_frame, bootstyle=DISPLAY_STYLES[i], text=option, variable=variable, command=lambda: self.refresh_view(), padding=7, state=ttk.DISABLED)
+            iid = ttk.Checkbutton(display_options_frame, bootstyle=DISPLAY_STYLES[i], text=option, variable=variable, command=lambda: self.refresh_view(), padding=7, state=DISABLED)
             iid.grid(row=i//4, column=i % 4, sticky='NEWS')
             self.display_options.append([variable, tag, active, iid])
 
@@ -122,7 +122,7 @@ class MainInterface(ttk.Frame):
         lense_button_frame.grid(row=2, column=0, sticky='NEWS')
         lense_button_frame.grid_rowconfigure(0, weight=1)
         for index, lense in enumerate(['Art', 'Provinces', 'Regions', 'Terrain', 'Population', 'Resources']):
-            iid = ttk.Radiobutton(lense_button_frame, bootstyle="primary-outline-toolbutton", text=lense, variable=self.selected_lense, command=lambda: self.refresh_view(), value=index, state=ttk.DISABLED)
+            iid = ttk.Radiobutton(lense_button_frame, bootstyle="primary-outline-toolbutton", text=lense, variable=self.selected_lense, command=lambda: self.refresh_view(), value=index, state=DISABLED)
             iid.grid(row=0, column=index, sticky='NEWS')
             lense_button_frame.grid_columnconfigure(index, weight=1)
             self.lense_options.append(iid)
@@ -133,7 +133,7 @@ class MainInterface(ttk.Frame):
         plane_button_frame.grid_rowconfigure(0, weight=1)
 
         for plane in range(1, 10):
-            iid = ttk.Radiobutton(plane_button_frame, bootstyle='primary-outline-toolbutton', text=str(plane), variable=self.selected_plane, command=lambda: self.refresh_view(), value=plane, state=ttk.DISABLED)
+            iid = ttk.Radiobutton(plane_button_frame, bootstyle='primary-outline-toolbutton', text=str(plane), variable=self.selected_plane, command=lambda: self.refresh_view(), value=plane, state=DISABLED)
             iid.grid(row=0, column=plane-1, sticky='NEWS')
             plane_button_frame.grid_columnconfigure(plane-1, weight=1)
             self.plane_options.append(iid)
@@ -222,19 +222,19 @@ class MainInterface(ttk.Frame):
             i.destroy()
 
         if not self.empty:  # If there is data
-            parent = self.explorer_panel.insert("", ttk.END, text="Planes")
+            parent = self.explorer_panel.insert("", END, text="Planes")
             for plane in self.map.planes:
-                plane_tag = self.explorer_panel.insert(parent, ttk.END, text=f'Plane {plane}')
+                plane_tag = self.explorer_panel.insert(parent, END, text=f'Plane {plane}')
                 for province in self.map.province_list[plane]:
-                    self.explorer_panel.insert(plane_tag, ttk.END, text=f'Province {province.plane}-{province.index}', tags="explorer_tag")
+                    self.explorer_panel.insert(plane_tag, END, text=f'Province {province.plane}-{province.index}', tags="explorer_tag")
 
-            parent = self.explorer_panel.insert("", ttk.END, text="Regions")
+            parent = self.explorer_panel.insert("", END, text="Regions")
             for i, text in enumerate(EXPLORER_REGIONS):
-                parent2 = self.explorer_panel.insert(parent, ttk.END, text=text)
+                parent2 = self.explorer_panel.insert(parent, END, text=text)
                 for j, region in enumerate(self.map.region_list[i]):
-                    region_tag = self.explorer_panel.insert(parent2, ttk.END, text=f'{region.name}')
+                    region_tag = self.explorer_panel.insert(parent2, END, text=f'{region.name}')
                     for province in region.provinces:
-                        self.explorer_panel.insert(region_tag, ttk.END, text=f'Province {province.plane}-{province.index}', tags="explorer_tag")
+                        self.explorer_panel.insert(region_tag, END, text=f'Province {province.plane}-{province.index}', tags="explorer_tag")
 
     def update_viewing_panel(self):  # This is run whenever the screen needs get updated
 
@@ -265,7 +265,7 @@ class MainInterface(ttk.Frame):
                     image = Image.fromarray(array, mode='L').convert(mode='1', dither=Image.Dither.NONE)
                     image = image.transpose(method=Image.Transpose.ROTATE_90)
                     bitmap = ImageTk.BitmapImage(image)
-                    iid = self.viewing_canvas.create_image(x, self.map.map_size[plane][1]-y, anchor=ttk.SW, image=bitmap, state=ttk.HIDDEN, tags=(f'plane{plane}', f'{i}', 'bitmap'))
+                    iid = self.viewing_canvas.create_image(x, self.map.map_size[plane][1]-y, anchor=SW, image=bitmap, state=HIDDEN, tags=(f'plane{plane}', f'{i}', 'bitmap'))
                     self.viewing_bitmaps[plane].append([i, iid, bitmap])
 
                 # Making art objects
@@ -276,13 +276,13 @@ class MainInterface(ttk.Frame):
                         image2 = image.copy()
                         image2.putalpha(170)
                         trans_photoimage = ImageTk.PhotoImage(image2)
-                        iid = self.viewing_canvas.create_image(0, 0, anchor=ttk.NW, image=photoimage, disabledimage=trans_photoimage, state=ttk.HIDDEN, tags=(f'plane{plane}', 'photoimage'))
+                        iid = self.viewing_canvas.create_image(0, 0, anchor=NW, image=photoimage, disabledimage=trans_photoimage, state=HIDDEN, tags=(f'plane{plane}', 'photoimage'))
                         self.viewing_photoimages[plane] = [self.map.image_file[plane], iid, photoimage, trans_photoimage]
 
                 # Making borders
                 image = Image.fromarray(np.flip(pixel_matrix_2_borders_array(self.map.pixel_map[plane], thickness=3).transpose(), axis=0), mode='L')
                 border = ImageTk.BitmapImage(image.convert(mode='1', dither=Image.Dither.NONE), foreground='black')
-                iid = self.viewing_canvas.create_image(0, 0, anchor=ttk.NW, image=border, state=ttk.HIDDEN, tags=(f'plane{plane}', 'borders'))
+                iid = self.viewing_canvas.create_image(0, 0, anchor=NW, image=border, state=HIDDEN, tags=(f'plane{plane}', 'borders'))
                 self.viewing_borders[plane] = [iid, border]
 
                 # Making connection objects
@@ -290,7 +290,7 @@ class MainInterface(ttk.Frame):
                 done_nodes = set()
                 for i, (x1, y1) in enumerate(virtual_coordinates):
                     for j in np.argwhere(virtual_graph[i, :] == 1):
-                        j = int(j)
+                        j = j.item()
 
                         neighbour_col = CONNECTION_COLOURS[0]
                         for connection in self.map.connection_list[plane]:
@@ -300,11 +300,11 @@ class MainInterface(ttk.Frame):
 
                         if j not in done_nodes:
                             x2, y2 = virtual_coordinates[j]
-                            iid = self.viewing_canvas.create_line(x1, self.map.map_size[plane][1]-y1, x2, self.map.map_size[plane][1]-y2, state=ttk.HIDDEN, dash=(100, 15), activefill='white', fill=neighbour_col, tags=(f'plane{plane}', f'{(i+1, j+1)}', 'connections', 'clickable'), width=6)
+                            iid = self.viewing_canvas.create_line(x1, self.map.map_size[plane][1]-y1, x2, self.map.map_size[plane][1]-y2, state=HIDDEN, dash=(100, 15), activefill='white', fill=neighbour_col, tags=(f'plane{plane}', f'{(i+1, j+1)}', 'connections', 'clickable'), width=6)
                             self.viewing_connections[plane].append([connection, iid])
 
                     if i < self.map.layout.province_graphs[plane].size:
-                        iid = self.viewing_canvas.create_oval(x1-12, self.map.map_size[plane][1]-(y1-12), x1+12, self.map.map_size[plane][1]-(y1+12), state=ttk.HIDDEN, activefill='white', fill='red', tags=(f'plane{plane}', f'{i+1}', 'nodes', 'clickable'), width=3)
+                        iid = self.viewing_canvas.create_oval(x1-12, self.map.map_size[plane][1]-(y1-12), x1+12, self.map.map_size[plane][1]-(y1+12), state=HIDDEN, activefill='white', fill='red', tags=(f'plane{plane}', f'{i+1}', 'nodes', 'clickable'), width=3)
                         self.viewing_nodes[plane].append([i+1, iid])
                     done_nodes.add(i)
 
@@ -313,10 +313,10 @@ class MainInterface(ttk.Frame):
                     x = province.coordinates[0]
                     y = self.map.map_size[plane][1] - province.coordinates[1]
                     if has_terrain(province.terrain_int, 33554432):
-                        iid = self.viewing_canvas.create_image(x+40, y-40, anchor=ttk.CENTER, image=self.throne_image, state=ttk.HIDDEN, tags=(f'plane{plane}', 'thrones'))
+                        iid = self.viewing_canvas.create_image(x+40, y-40, anchor=CENTER, image=self.throne_image, state=HIDDEN, tags=(f'plane{plane}', 'thrones'))
                         self.icons[plane].append(iid)
                     elif has_terrain(province.terrain_int, 67108864):
-                        iid = self.viewing_canvas.create_image(x+30, y-30, anchor=ttk.CENTER, image=self.capital_image, state=ttk.HIDDEN, tags=(f'plane{plane}', 'capitals'))
+                        iid = self.viewing_canvas.create_image(x+30, y-30, anchor=CENTER, image=self.capital_image, state=HIDDEN, tags=(f'plane{plane}', 'capitals'))
                         self.icons[plane].append(iid)  # Store the icons for later use
 
                     image = None
@@ -324,7 +324,7 @@ class MainInterface(ttk.Frame):
                         if has_terrain(province.terrain_int, terrain):
                             image = self.terrain_images[terrain]
                     if image is not None:
-                        iid = self.viewing_canvas.create_image(x-30, y-40, anchor=ttk.CENTER, image=image, state=ttk.HIDDEN, tags=(f'plane{plane}', 'info', 'terrain'))
+                        iid = self.viewing_canvas.create_image(x-30, y-40, anchor=CENTER, image=image, state=HIDDEN, tags=(f'plane{plane}', 'info', 'terrain'))
                         self.icons[plane].append(iid)  # Store the icons for later use
 
     def update_editor_panel(self):
@@ -347,17 +347,17 @@ class MainInterface(ttk.Frame):
     def update_plane_lense_panels(self):
         if not self.empty:
             for plane in self.map.planes:
-                self.plane_options[plane-1].config(state=ttk.NORMAL)
+                self.plane_options[plane-1].config(state=NORMAL)
 
             for iid in self.lense_options:
-                iid.config(state=ttk.NORMAL)
+                iid.config(state=NORMAL)
 
             if self.map.image_file[1] is None:
-                self.lense_options[0].config(state=ttk.DISABLED)
+                self.lense_options[0].config(state=DISABLED)
 
             for variable, tag, active, iid in self.display_options:
                 if active:
-                    iid.config(state=ttk.NORMAL)
+                    iid.config(state=NORMAL)
 
     def refresh_view(self):  # This function handles switching the views and updating the viewer images
         if not self.empty:  # If there is data
@@ -365,7 +365,7 @@ class MainInterface(ttk.Frame):
             new_plane = self.selected_plane.get()
 
             if self.viewing_photoimages[new_plane] is None:
-                self.lense_options[0].config(state=ttk.DISABLED)
+                self.lense_options[0].config(state=DISABLED)
                 if self.selected_lense.get() == 0:
                     self.selected_lense.set(1)
 
@@ -376,7 +376,7 @@ class MainInterface(ttk.Frame):
             for plane in self.map.planes:
 
                 if plane != new_plane:
-                    self.viewing_canvas.itemconfigure(f'plane{plane}', state=ttk.HIDDEN)
+                    self.viewing_canvas.itemconfigure(f'plane{plane}', state=HIDDEN)
                 else:
                     art_active = 0
                     if new_lense == 0:
@@ -386,14 +386,14 @@ class MainInterface(ttk.Frame):
                             colour = self.bitmap_colors[plane][i-1][new_lense]
                             bitmap._BitmapImage__photo.config(foreground=colour)
                             if new_lense != 0:
-                                self.viewing_canvas.itemconfigure(f'plane{plane}', state=ttk.NORMAL)
+                                self.viewing_canvas.itemconfigure(f'plane{plane}', state=NORMAL)
 
                     if self.viewing_photoimages[plane] is not None:
                         i, iid, photoimage, trans_photoimage = self.viewing_photoimages[plane]
                         self.viewing_canvas.itemconfigure(iid, state=UI_STATES[art_active])  # Update the art layer
 
                     for variable, tag, active, _ in self.display_options:  # Update the display options
-                        self.viewing_canvas.itemconfigure(tag, state=ttk.HIDDEN)
+                        self.viewing_canvas.itemconfigure(tag, state=HIDDEN)
                         if variable.get():
                             for iid in self.viewing_canvas.find_withtag(tag):
                                 if f'plane{plane}' in self.viewing_canvas.gettags(iid):
@@ -426,7 +426,7 @@ def run_interface():
     app.place_window_center()
     app.rowconfigure(0, weight=1)
     app.columnconfigure(0, weight=1)
-    app.state('zoomed')
+    app.state('normal')
 
     def _config():
         x = 1
