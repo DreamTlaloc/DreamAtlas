@@ -1,6 +1,8 @@
 from .widgets import *
 from .loading import *
 from .ui_data import *
+import json
+from ttkbootstrap.themes.user import USER_THEMES
 
 
 class MainInterface(ttk.Frame):
@@ -422,14 +424,21 @@ class MainInterface(ttk.Frame):
 
 
 def run_interface():
+
+    if getattr(sys, "frozen", False):
+        with open(os.path.join(LOAD_DIR, '_internal/DreamAtlas/databases/themes.json'), 'r') as f:
+            themes = json.load(f)
+    else:
+        with open(os.path.join('DreamAtlas/databases/themes.json'), 'r') as f:
+            themes = json.load(f)
+    for theme in themes:
+        USER_THEMES[theme] = themes[theme]
+
     app = ttk.Window(title="DreamAtlas", themename='dreamfantasy', iconphoto=ART_ICON)
     app.place_window_center()
     app.rowconfigure(0, weight=1)
     app.columnconfigure(0, weight=1)
     app.state('normal')
-
-    def _config():
-        x = 1
 
     style_button = ttk.IntVar()
 
