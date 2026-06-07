@@ -1,21 +1,21 @@
 from DreamAtlas import *
+from pathlib import Path
 
-PATH = r'C:\Users\amyau\PycharmProjects\mapTlaloc\DreamAtlas\examples\\'
-name = 'smackdown_2_finals6'
+PATH = Path('.').absolute()
+name = 'test_map'
 index = 1
-
 # Load config
 settings = DreamAtlasSettings(index)
-settings.load_file(filename=PATH+'smackdown_2_finals.dream')
+settings.load_file(filename=PATH / 'examples' / '12_player_ea_test.dream')
 
-# cProfile.run('DreamAtlasGenerator(settings=settings)', sort='cumulative')
 smackdown_map = generator_dreamatlas(settings=settings)
 
-# Make the files
-# smackdown_map.map_title = [None, name, name+'_plane2']
-# smackdown_map.publish(location=PATH, name=name)
+# Make the files, default location is $REPO_DIR/maps/$NAME
+smackdown_map.map_title = [None, name, name+'_plane2']
+smackdown_map.publish(location=None, name=name)
 
-# Plot map images
-smackdown_map.layout.plot()
-# smackdown_map.plot()
-plt.show()
+
+# Plot map images (broken)
+#smackdown_map.layout.plot() #TODO: fix this?
+#smackdown_map.plot()
+#plt.show()

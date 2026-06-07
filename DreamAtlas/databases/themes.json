@@ -1,0 +1,44 @@
+{
+  "dreamfantasy": {
+    "type": "light",
+    "colors": {
+      "primary": "#023373",
+      "secondary": "#475458",
+      "success": "#008000",
+      "info": "#034aa6",
+      "warning": "#d55c04",
+      "danger": "#e70e02",
+      "light": "#b7dee7",
+      "dark": "#261423",
+      "bg": "#ddb66c",
+      "fg": "#261423",
+      "selectbg": "#475458",
+      "selectfg": "#b7dee7",
+      "border": "#bf843b",
+      "inputfg": "#261423",
+      "inputbg": "#b7dee7",
+      "active": "#bf843b"
+    }
+  },
+  "dreamvampire": {
+    "type": "light",
+    "colors": {
+      "primary": "#921232",
+      "secondary": "#475458",
+      "success": "#7d8568",
+      "info": "#a67449",
+      "warning": "#981812",
+      "danger": "#30258b",
+      "light": "#afbda4",
+      "dark": "#1f282b",
+      "bg": "#1f282b",
+      "fg": "#afbda4",
+      "selectbg": "#475458",
+      "selectfg": "#afbda4",
+      "border": "#475458",
+      "inputfg": "#1f282b",
+      "inputbg": "#afbda4",
+      "active": "#660d23"
+    }
+  }
+}

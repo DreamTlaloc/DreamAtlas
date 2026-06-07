@@ -291,9 +291,9 @@ class DreamAtlasGraph:
 
         # Set the graph size to embed (smaller is faster)
         scale_down = 100
-        size = np.array(self.map_size / scale_down, dtype=np.uint32)
+        size = np.array(self.map_size / scale_down, dtype=np.int64) # uint32 -> int64 to avoid OverflowError
         connections = [[1, 0], [0, 1], [0, -1], [-1, 0]]
-
+    
         # Make the H graph
         h_dict = dict()
         for x in range(size[0]):
@@ -564,6 +564,8 @@ class DreamAtlasGraph:
 
         k = len(self.coordinates)
         done_edges = set()
+        
+        # fills graph
         for i, j in self.get_all_connections():
             if (i, j) not in done_edges:  # If we haven't done this connection continue
                 done_edges.add((j, i))
@@ -609,6 +611,8 @@ class DreamAtlasGraph:
                         virtual_graph[j, k+3] = 1
                         virtual_coordinates[k+3] = [infinite_coordinates[1][0] - dart_x * self.map_size[0], infinite_coordinates[1][1] - dart_y * self.map_size[1]]
                     else:
+                        # crash for script.py happens around here.
+                        #TODO: fix crash? deprecate this?
                         virtual_graph[i, k] = 1  # Vertex to edge
                         virtual_graph[k, i] = 1
                         virtual_coordinates[k] = infinite_coordinates[0]

@@ -1,4 +1,5 @@
 import ttkbootstrap as ttk
+from ttkbootstrap.constants import *
 
 # Info to build UI dynamically [attribute, type, widget, label, options, active]
 UI_CONFIG_CONNECTION = {
@@ -141,5 +142,5 @@ LENSE_KEY = {'z': 0, 'x': 1, 'c': 2, 'v': 3, 'b': 4, 'n': 5}
 CONNECTION_COLOURS = {0: 'yellow', 33: 'red', 2: 'blue', 4: '#808080', 8: 'green', 16: 'cyan', 36: '#808080'}
 
 INPUT_ENTRY_SIZE = 275
-UI_STATES = (ttk.DISABLED, ttk.NORMAL, ttk.HIDDEN)
+UI_STATES = (DISABLED, NORMAL, HIDDEN)
 UI_CONNECTION_COLOURS = {0: 'black', 33: 'red', 2: 'blue', 4: 'grey', 8: 'green', 16: 'brown', 36: 'red', 3: 'pink'}  # [0, 'Standard border'], [33, 'Mountain pass'], [2, 'River border'], [4, 'Impassable'], [8, 'Road'], [16, 'River bridge'], [36, 'Impassable mountain'], [3, 'Waterfalls']
