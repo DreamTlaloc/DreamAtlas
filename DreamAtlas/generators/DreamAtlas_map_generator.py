@@ -14,7 +14,7 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
 
     def generator_logging(text):
         if ui is not None:
-            ui.status_label_var.set(text)
+            ui.update_progress()
         else:
             print(f'{text}')
 
