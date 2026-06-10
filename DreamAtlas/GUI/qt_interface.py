@@ -23,7 +23,7 @@ from .qt_ui_data import THEME_FANTASY, INTERFACE_TITLE, INTERFACE_ICON, LENSE_KE
     DISPLAY_TAGS, DISPLAY_STATES, EXPLORER_REGIONS, CONNECTION_COLOURS, UI_CONFIG_PROVINCE, UI_CONFIG_CONNECTION, \
     UI_CONFIG_SETTINGS
 from ..classes import DominionsMap, DreamAtlasSettings, Province, Connection
-from ..databases import ROOT_DIR
+from ..databases import ROOT_DIR, LOAD_DIR
 from ..functions import has_terrain, provinces_2_colours, pixel_matrix_2_borders_array, pixel_matrix_2_bitmap_arrays
 
 
@@ -62,23 +62,22 @@ class QtMainInterface(QMainWindow):
         # File menu
         file_menu = menubar.addMenu("File")
 
-        new_action = QAction("New", self)
-        # new_action.triggered.connect(self._action_new)
+        new_action = QAction("Clear", self)
+        new_action.triggered.connect(self.clear_map)
         file_menu.addAction(new_action)
 
         save_action = QAction("Save", self)
-        # save_action.triggered.connect(self._action_save)
+        save_action.triggered.connect(self.save_map)
         file_menu.addAction(save_action)
 
         load_map_action = QAction("Load map", self)
-        # load_map_action.triggered.connect(self._action_load_map)
+        load_map_action.triggered.connect(self.load_map)
         file_menu.addAction(load_map_action)
 
         file_menu.addSeparator()
 
         self._dark_mode_action = QAction("Dark Mode", self)
         self._dark_mode_action.setCheckable(True)
-        # self._dark_mode_action.triggered.connect(self._swap_theme)
         file_menu.addAction(self._dark_mode_action)
 
         # Generators menu
@@ -252,7 +251,7 @@ class QtMainInterface(QMainWindow):
             for i, (x, y), array in pixel_matrix_2_bitmap_arrays(self.map.pixel_map[plane]):
                 pil_img = Image.fromarray(array, mode='L').convert('RGBA')
                 pil_img = pil_img.transpose(Image.Transpose.ROTATE_90)
-                px = pil_to_qpixmap(pil_img)
+                px = self.pil_to_qpixmap(pil_img)
                 item = scene.addPixmap(px)
                 item.setPos(x, map_h - y)
                 item.setVisible(False)
@@ -264,10 +263,10 @@ class QtMainInterface(QMainWindow):
             # --- Art layer ---
             if self.map.image_file[plane] is not None and self.map.image_file[plane].endswith('.tga'):
                 pil_img = Image.open(self.map.image_file[plane])
-                px_normal = pil_to_qpixmap(pil_img)
+                px_normal = self.pil_to_qpixmap(pil_img)
                 pil_trans = pil_img.copy();
                 pil_trans.putalpha(170)
-                px_trans = pil_to_qpixmap(pil_trans)
+                px_trans = self.pil_to_qpixmap(pil_trans)
                 art_item = scene.addPixmap(px_normal)
                 art_item.setPos(0, 0)
                 art_item.setVisible(False)
@@ -288,7 +287,7 @@ class QtMainInterface(QMainWindow):
                 Image.new('L', border_img.size, 0),
                 r,  # use luminance channel as alpha mask
             ))
-            border_px = pil_to_qpixmap(border_img)
+            border_px = self.pil_to_qpixmap(border_img)
             border_item = scene.addPixmap(border_px)
             border_item.setPos(0, 0)
             border_item.setVisible(False)
@@ -488,15 +487,15 @@ class QtMainInterface(QMainWindow):
             ui_config=UI_CONFIG_SETTINGS,
             target_class=init_settings,
             map=self.map,
+            geometry="1000x1000"
         )
 
-    def load_map(self, folder: str):
-        if folder:
-            self.map.load_folder(folder)
-            self.update_gui()
+    def clear_map(self):
+        x = 1
 
-    def load_file(self, file: str):
-        self.map.load_file(file)
+    def load_map(self):
+        path, _ = QFileDialog.getExistingDirectory(self, str(LOAD_DIR))
+        self.map.load_folder(path)
         self.update_gui()
 
     def save_map(self, folder: str):
@@ -535,6 +534,14 @@ class QtMainInterface(QMainWindow):
     def _on_plane_changed(self, plane_id: int):
         self._selected_plane = plane_id
         self.refresh_view()
+
+    def pil_to_qpixmap(self, pil_image: Image.Image) -> QPixmap:
+
+        if pil_image.mode != "RGBA":
+            pil_image = pil_image.convert("RGBA")
+        data = pil_image.tobytes("raw", "RGBA")
+        qimg = QImage(data, pil_image.width, pil_image.height, QImage.Format.Format_RGBA8888)
+        return QPixmap.fromImage(qimg)
 
 
 def run_qt_interface():
