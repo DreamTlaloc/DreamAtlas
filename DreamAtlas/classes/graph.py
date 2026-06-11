@@ -4,8 +4,10 @@ import minorminer as mnm
 import networkx as ntx
 import random as rd
 from numba import njit, prange
-from DreamAtlas.databases import NEIGHBOURS_FULL
-from DreamAtlas.functions import LloydRelaxation
+from ..databases import NEIGHBOURS_FULL
+from ..functions import LloydRelaxation
+
+from ..functions.numba_pixel_mapping import _jump_flood_algorithm
 
 
 def less_first(a, b):
@@ -123,6 +125,27 @@ def _numba_spring_adjustment(graph: np.array,
             break
 
     return coordinates, darts
+
+
+@njit(parallel=True, fastmath=True, cache=True)
+def _find_pixel_centroids(num_coordinates: int,
+                          pixel_matrix: np.array):
+    coordinate_array = np.zeros((num_coordinates, 2), dtype=np.uint16)
+    shape_x, shape_y = np.shape(pixel_matrix)
+
+    for i in prange(num_coordinates):
+        x_sum, y_sum = 0, 0
+        where_list = np.where(pixel_matrix == i)
+        offset = np.divide(np.shape(pixel_matrix), 2) - where_list[0]
+
+        for x, y in where_list:
+            x_sum += np.mod(offset[0] + x, shape_x)
+            y_sum += np.mod(offset[1] + y, shape_y)
+
+        coordinate_array[i][0] = np.mod(np.subtract(x_sum / len(where_list), offset[0]), shape_x)
+        coordinate_array[i][1] = np.mod(np.subtract(y_sum / len(where_list), offset[1]), shape_y)
+
+    return coordinate_array
 
 
 class DreamAtlasGraph:
@@ -538,6 +561,39 @@ class DreamAtlasGraph:
         for _ in range(iterations):
             lloyd.relax()
         self.coordinates = lloyd.get_points()
+
+    def tlaloc_lloyd_relaxation(self,
+                                scale_down: int = 2,
+                                iterations: int = 2):
+        # Iteratively runs a jump flood algorithm on a scaled down version of the map, then adjusts the positions of the
+        # coordinates to the centroids of their shapes. This works as a Lloyd relaxation except that we also incorporate
+        # a distance metric and the toroidal topology.
+        small_x_size = int(self.map_size[0] / scale_down)
+        small_y_size = int(self.map_size[1] / scale_down)
+
+        for iteration in range(iterations):
+
+            small_matrix = np.zeros((small_x_size, small_y_size), dtype=np.uint16)
+
+            s_distance_matrix = np.full((small_x_size, small_y_size), np.inf, dtype=np.float32)
+            s_vector_matrix = np.zeros((small_x_size, small_y_size, 2), dtype=np.float32)
+            small_noise_array = np.zeros((small_x_size, small_y_size, 2), dtype=np.float32)
+
+            for i, (x, y) in enumerate(self.coordinates):
+                x_small = int((x / scale_down) % small_x_size)
+                y_small = int((y / scale_down) % small_y_size)
+                small_matrix[x_small, y_small] = i + 1
+                s_distance_matrix[x_small, y_small] = 0
+
+            small_output_matrix, small_distance_matrix, small_vector_matrix = _jump_flood_algorithm(small_matrix,
+                                                                                                    noise_matrix=small_noise_array,
+                                                                                                    step_size=2 ** (
+                                                                                                        int(1 + np.log(
+                                                                                                            max(self.map_size) / scale_down))),
+                                                                                                    distance_matrix=s_distance_matrix,
+                                                                                                    vector_matrix=s_vector_matrix)
+
+            self.coordinates = _find_pixel_centroids(len(self.coordinates), small_output_matrix)
 
     def spring_adjustment(self, iterations=None, ratios=None):
         if ratios is None:

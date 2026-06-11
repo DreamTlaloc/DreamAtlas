@@ -1,5 +1,7 @@
 # Imports all the DreamAtlas functionality and dependencies
-from DreamAtlas import *
+import numpy as np
+import scipy as sc
+from numba import njit, prange
 
 
 @njit(fastmath=True, cache=True)
@@ -26,7 +28,6 @@ def _jump_flood_algorithm(pixel_matrix: np.array,
                           step_size: int,
                           distance_matrix: np.array,
                           vector_matrix: np.array):
-
     shape_x, shape_y = np.shape(pixel_matrix)
 
     end = False
@@ -57,9 +58,12 @@ def _jump_flood_algorithm(pixel_matrix: np.array,
                     if p == q or q == 0:
                         continue
                     else:
-                        q_vector = ping_vector_matrix[rx, ry] - n  # q_vector is the vector from the ping pixel to the q pixel
-                        q_dist = euclidean_2d(q_vector - noise_matrix[x, y])  # q_dist is the distance from the ping pixel to the q pixel
-                        if p == 0 or ping_distance_matrix[x, y] > q_dist:  # if our pixel is empty or closer to q, populate it with q
+                        q_vector = ping_vector_matrix[
+                                       rx, ry] - n  # q_vector is the vector from the ping pixel to the q pixel
+                        q_dist = euclidean_2d(
+                            q_vector - noise_matrix[x, y])  # q_dist is the distance from the ping pixel to the q pixel
+                        if p == 0 or ping_distance_matrix[
+                            x, y] > q_dist:  # if our pixel is empty or closer to q, populate it with q
                             pong_distance_matrix[x, y] = q_dist
                             pong_vector_matrix[x, y] = q_vector
                             pong_matrix[x, y] = q
@@ -99,25 +103,30 @@ def find_pixel_ownership(coordinates_array: np.array,
     for i, (x, y) in enumerate(coordinates_array):
         x_small = int((x / scale_down) % small_x_size)
         y_small = int((y / scale_down) % small_y_size)
-        small_matrix[x_small, y_small] = i+1
+        small_matrix[x_small, y_small] = i + 1
         s_distance_matrix[x_small, y_small] = 0
 
     small_output_matrix, small_distance_matrix, small_vector_matrix = _jump_flood_algorithm(small_matrix,
                                                                                             noise_matrix=small_noise_array,
-                                                                                            step_size=2 ** (int(1 + np.log(max(map_size) / scale_down))),
+                                                                                            step_size=2 ** (
+                                                                                                int(1 + np.log(
+                                                                                                    max(map_size) / scale_down))),
                                                                                             distance_matrix=s_distance_matrix,
                                                                                             vector_matrix=s_vector_matrix)
 
     # Scale the matrix back up and run a JFA again to refine
     zoom = np.divide(map_size, small_output_matrix.shape)
-    final_matrix = sc.ndimage.zoom(small_output_matrix, zoom=zoom, order=0, output=np.uint16)[:map_size[0], :map_size[1]]
-    final_distance_matrix = sc.ndimage.zoom(small_distance_matrix * scale_down, zoom=zoom, order=0, output=np.float32)[:map_size[0], :map_size[1]]
-    final_vector_matrix = sc.ndimage.zoom(small_vector_matrix * scale_down, zoom=[zoom[0], zoom[1], 1], order=0, output=np.float32)[:map_size[0], :map_size[1]]
+    final_matrix = sc.ndimage.zoom(small_output_matrix, zoom=zoom, order=0, output=np.uint16)[:map_size[0],
+                   :map_size[1]]
+    final_distance_matrix = sc.ndimage.zoom(small_distance_matrix * scale_down, zoom=zoom, order=0, output=np.float32)[
+                            :map_size[0], :map_size[1]]
+    final_vector_matrix = sc.ndimage.zoom(small_vector_matrix * scale_down, zoom=[zoom[0], zoom[1], 1], order=0,
+                                          output=np.float32)[:map_size[0], :map_size[1]]
 
     for i, (x, y) in enumerate(coordinates_array):
         x_final = int((map_size[0] + x) % map_size[0])
         y_final = int((map_size[1] + y) % map_size[1])
-        final_matrix[x_final, y_final] = i+1
+        final_matrix[x_final, y_final] = i + 1
         noise_array[x_final, y_final] = np.zeros(2, dtype=np.float32)  # Reset the noise array for the final matrix
 
     final_matrix, _, __ = _jump_flood_algorithm(final_matrix,
@@ -149,7 +158,7 @@ def find_subnodal_pixel_ownership(coordinates_array: np.array,
     for i, (x, y) in enumerate(coordinates_array):
         x_small = int((x / scale_down) % small_x_size)
         y_small = int((y / scale_down) % small_y_size)
-        subnode_matrix[x_small, y_small] = i+1
+        subnode_matrix[x_small, y_small] = i + 1
         s_distance_matrix[x_small, y_small] = 0
 
     subnode_matrix, _, _ = _jump_flood_algorithm(subnode_matrix,
@@ -182,20 +191,23 @@ def find_subnodal_pixel_ownership(coordinates_array: np.array,
 
     small_matrix, small_distance_matrix, small_vector_matrix = _jump_flood_algorithm(small_matrix,
                                                                                      noise_matrix=small_noise_array,
-                                                                                     step_size=2 ** (1 + int(np.log(max(map_size) / scale_down))),
+                                                                                     step_size=2 ** (1 + int(np.log(
+                                                                                         max(map_size) / scale_down))),
                                                                                      distance_matrix=s_distance_matrix,
                                                                                      vector_matrix=s_vector_matrix)
 
     # Scale the matrix back up and run a JFA again to refine
     zoom = np.divide(map_size, small_matrix.shape)
     final_matrix = sc.ndimage.zoom(small_matrix, zoom=zoom, order=0, output=np.uint16)[:map_size[0], :map_size[1]]
-    final_distance_matrix = sc.ndimage.zoom(small_distance_matrix * scale_down, zoom=zoom, order=0, output=np.float32)[:map_size[0], :map_size[1]]
-    final_vector_matrix = sc.ndimage.zoom(small_vector_matrix * scale_down, zoom=[zoom[0], zoom[1], 1], order=0, output=np.float32)[:map_size[0], :map_size[1]]
+    final_distance_matrix = sc.ndimage.zoom(small_distance_matrix * scale_down, zoom=zoom, order=0, output=np.float32)[
+                            :map_size[0], :map_size[1]]
+    final_vector_matrix = sc.ndimage.zoom(small_vector_matrix * scale_down, zoom=[zoom[0], zoom[1], 1], order=0,
+                                          output=np.float32)[:map_size[0], :map_size[1]]
 
     for i, (x, y) in enumerate(coordinates_array):
         x_final = int((map_size[0] + x) % map_size[0])
         y_final = int((map_size[1] + y) % map_size[1])
-        final_matrix[x_final, y_final] = i+1
+        final_matrix[x_final, y_final] = i + 1
         noise_array[x_final, y_final] = np.zeros(2, dtype=np.float32)  # Reset the noise array for the final matrix
 
     final_matrix, _, __ = _jump_flood_algorithm(final_matrix,
@@ -234,25 +246,6 @@ def pb_pixel_allocation(pixel_matrix):
     return pixel_ownership_list
 
 
-def pb_2_map(pb_list, width, height):
-    pixel_map = np.array((width, height), dtype=np.int16)
-
-    for pb in pb_list:
-        x, y, len, owner = pb
-        for pixel in range(len):
-            pixel_map[x + pixel][y] = owner
-            coordinate_dict[owner].append([x + pixel, y])
-
-            province = self.province_list[owner - 1]
-
-    # self.height_map[x + pixel][y] = 20
-    # if province.terrain_int & 4:
-    #     self.height_map[x + pixel][y] = -30
-    # if province.terrain_int & 2052 == 2052:
-    #     self.height_map[x + pixel][y] = -100
-    return pixel_map
-
-
 @njit(parallel=True, cache=True)
 def fast_matrix_2_pb(pixel_matrix):
     x_size, y_size = pixel_matrix.shape
@@ -271,7 +264,7 @@ def fast_matrix_2_pb(pixel_matrix):
 def fast_pb_2_matrix(pb_list, width, height):
     pixel_map = np.zeros((width, height), dtype=np.uint16)
     for x, y, l, i in pb_list:
-        pixel_map[x:x+l+1, y] = i
+        pixel_map[x:x + l + 1, y] = i
 
     return pixel_map
 
@@ -281,7 +274,8 @@ def pixel_matrix_2_bitmap_arrays(pixel_matrix):
 
     for i in np.unique(pixel_matrix):  # Goes through all unique province indices and finds the bitmaps
         bitmap_array = pixel_matrix == i
-        non_zero = np.nonzero(bitmap_array)  # Reduce the size by finding the bounding box and recording the positional coordinates
+        non_zero = np.nonzero(
+            bitmap_array)  # Reduce the size by finding the bounding box and recording the positional coordinates
         x_1 = non_zero[0].min()
         x_2 = non_zero[0].max()
         y_1 = non_zero[1].min()
@@ -313,7 +307,6 @@ def numba_height_map(pixel_map, height_array):
 
 @njit(parallel=True, cache=True)
 def numba_subnode_cleanup(pixel_map, subnode_array):
-
     output_map = np.zeros(pixel_map.shape, dtype=np.uint16)
 
     for x in prange(pixel_map.shape[0]):
@@ -321,3 +314,4 @@ def numba_subnode_cleanup(pixel_map, subnode_array):
             output_map[x, y] = subnode_array[pixel_map[x, y]]
 
     return output_map
+
