@@ -1,7 +1,14 @@
+import random as rd
+import numpy as np
+import matplotlib.cm as cm
+import matplotlib.pyplot as plt
+
 from .class_province import Province
 from .class_settings import DreamAtlasSettings
-from . import *
+from .class_nation import Nation, CustomNation, GenericNation
 
+from DreamAtlas.databases import *
+from DreamAtlas.functions import *
 
 class Region:
 

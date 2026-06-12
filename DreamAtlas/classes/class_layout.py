@@ -1,8 +1,15 @@
+import random as rd
+from copy import copy
+
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy.cluster.vq as sccvq
 
-from . import *
+from .graph import DreamAtlasGraph
+from .class_connection import Connection
 
+from DreamAtlas.functions import *
+from DreamAtlas.databases import *
 
 class DominionsLayout:
 

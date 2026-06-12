@@ -1,5 +1,8 @@
-from DreamAtlas import *
+import random as rd
+import numpy as np
+import matplotlib as mpl
 
+from DreamAtlas.databases import *
 
 def terrain_int2list(terrain_int):          # Function for separating terrain int into the components
     terrain_list = list()

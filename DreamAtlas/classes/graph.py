@@ -4,10 +4,9 @@ import minorminer as mnm
 import networkx as ntx
 import random as rd
 from numba import njit, prange
-from ..databases import NEIGHBOURS_FULL
-from ..functions import LloydRelaxation
 
-from ..functions.numba_pixel_mapping import _jump_flood_algorithm
+from DreamAtlas.databases import NEIGHBOURS_FULL
+from DreamAtlas.functions import LloydRelaxation, _jump_flood_algorithm
 
 
 def less_first(a, b):

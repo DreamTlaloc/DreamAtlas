@@ -1,6 +1,13 @@
 import queue
 import threading
-from DreamAtlas import *
+
+import tkinter.filedialog as tkf            # Critical
+import ttkbootstrap as ttk                  # Critical
+from ttkbootstrap.constants import *        # Critical
+from ttkbootstrap.tooltip import ToolTip    # Critical
+
+from DreamAtlas.databases.dreamatlas_data import *
+from DreamAtlas.generators import generator_dreamatlas
 
 
 class GeneratorLoadingWidget(ttk.Toplevel):

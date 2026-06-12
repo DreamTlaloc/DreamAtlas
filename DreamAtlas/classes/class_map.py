@@ -1,7 +1,10 @@
 # Imports all the DreamAtlas functionality and dependencies
 import matplotlib.pyplot as plt
+import struct
 
-from . import *
+from DreamAtlas.databases import *
+from DreamAtlas.functions import terrain_int2list
+from .class_layout import DominionsLayout
 
 
 class DominionsMap:

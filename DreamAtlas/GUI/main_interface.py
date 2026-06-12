@@ -1,9 +1,28 @@
+# stdlib imports
+import os
+import sys
+import json
+import numpy as np
+from copy import copy
+
+# third party libraries
+from PIL import Image, ImageShow, ImageTk
+import tkinter.filedialog as tkf
+import ttkbootstrap as ttk
+from ttkbootstrap.constants import *
+from ttkbootstrap.tooltip import ToolTip
+from ttkbootstrap.themes.user import USER_THEMES
+
+# import all siblings
 from .widgets import *
 from .loading import *
 from .ui_data import *
-import json
-from ttkbootstrap.themes.user import USER_THEMES
 
+# import DreamAtlas itself
+from DreamAtlas.classes import DominionsMap, DreamAtlasSettings
+from DreamAtlas.functions import *
+print("DEBUG: Executing main_interface.py")
+from DreamAtlas.databases import * # this is the only legit place where you need star imports
 
 class MainInterface(ttk.Frame):
 

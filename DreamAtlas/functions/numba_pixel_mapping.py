@@ -1,3 +1,7 @@
+import numpy as np
+import scipy as sc
+from numba import njit, prange
+
 # Imports all the DreamAtlas functionality and dependencies
 import numpy as np
 import scipy as sc

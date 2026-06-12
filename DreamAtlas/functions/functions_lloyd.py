@@ -1,5 +1,5 @@
-from DreamAtlas import *
-
+import numpy as np
+import scipy as sc
 
 # Credit to Douglas Duhaime
 # https://github.com/duhaime/lloyd/blob/master/lloyd/lloyd.py

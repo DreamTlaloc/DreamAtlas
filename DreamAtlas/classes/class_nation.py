@@ -1,5 +1,4 @@
-from . import *
-
+from DreamAtlas.databases import *
 
 class Nation:
 

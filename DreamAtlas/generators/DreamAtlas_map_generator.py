@@ -1,6 +1,8 @@
-import cProfile
+import numpy as np
 
-from DreamAtlas import *
+from DreamAtlas.classes import *
+from DreamAtlas.functions import *
+from DreamAtlas.databases import *
 from .DreamAtlas_geo_generator import simplex_generator_geography
 
 

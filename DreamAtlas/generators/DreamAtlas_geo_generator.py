@@ -1,5 +1,11 @@
-from DreamAtlas import *
+import numpy as np
+import noise as ns
+import scipy as sc
+from numba import njit, prange
 
+from DreamAtlas.classes import *
+from DreamAtlas.functions import *
+from DreamAtlas.databases import *
 
 def make_noise_array(map_size, scale):
     x_size, y_size = map_size
