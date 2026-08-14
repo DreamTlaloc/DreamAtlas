@@ -38,7 +38,7 @@ class DominionsMap:
 
         # Advanced map data/commands
         self.map_text_colour = [1.0, 1.0, 1.0, 0]
-        self.map_dom_colour = [255, 202, 255, 5]
+        self.map_dom_colour = [255, 242, 160, 25]
         self.max_sail_distance = [2 for _ in range(10)]
         self.magic_sites = [60 for _ in range(10)]
         self.capital_names = True
