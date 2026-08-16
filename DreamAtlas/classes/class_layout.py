@@ -21,6 +21,7 @@ class DominionsLayout:
         # Province level layout - list per plane
         self.province_graphs = [None for _ in range(10)]
         self.edge_types = [list() for _ in range(10)]
+        self.special_neighbours = [list() for _ in range(10)]
         self.connections = [list() for _ in range(10)]
         self.gates = [list() for _ in range(10)]
         self.min_dist = [np.inf for _ in range(10)]
