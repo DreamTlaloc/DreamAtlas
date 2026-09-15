@@ -1,12 +1,13 @@
-import numpy as np
 import scipy as sc
 import minorminer as mnm
 import networkx as ntx
 import random as rd
+
 from numba import njit, prange
 
-from DreamAtlas.databases import NEIGHBOURS_FULL
-from DreamAtlas.functions import LloydRelaxation, _jump_flood_algorithm
+from ..databases.dreamatlas_data import *
+from ..functions.functions_lloyd import LloydRelaxation
+from ..functions.numba_pixel_mapping import _jump_flood_algorithm
 
 
 def less_first(a, b):
@@ -67,7 +68,7 @@ def _numba_attractor_adjustment(graph: np.array,
     return coordinates, darts
 
 
-@njit(parallel=True, cache=True)
+@njit(parallel=True, fastmath=True, cache=True)
 def _numba_spring_adjustment(graph: np.array,
                              coordinates: np.array,
                              darts: np.array,
@@ -84,17 +85,47 @@ def _numba_spring_adjustment(graph: np.array,
     for i, j in connections:
         lengths[i, j] = base_length * (weight_array[i] + weight_array[j])
 
-    net_velocity = np.zeros((dict_size, 2), dtype=np.float32)
-    for _ in range(iterations):
+    max_velocity = base_length * 0.4
+    max_force = base_length * 2.0
+    net_velocity = np.zeros((dict_size, 2), dtype=np.float64)
+
+    for iteration in range(iterations):
         net_spring_force = np.zeros((dict_size, 2), dtype=np.float32)
         for i in prange(dict_size):
             for j in np.argwhere(graph[i, :] == 1):
                 j = j[0]
                 vector = coordinates[j] + darts[i, j] * map_size - coordinates[i]
+                dist = _numba_norm(vector)
 
-                net_spring_force[i] += vector * (1 - lengths[i, j] / (0.000001 + _numba_norm(vector)))
+                if dist < 5:  # nodes on top of each other — nudge apart
+                    net_spring_force[i, 0] += 2
+                    net_spring_force[i, 1] += 2
+                    continue
 
-        net_velocity = damping_ratio * (net_velocity + spring_coefficient * net_spring_force)
+                force_magnitude = 1 - lengths[i, j] / dist
+                force_magnitude = max(-max_force, min(max_force, force_magnitude))
+                net_spring_force[i] += vector * force_magnitude
+
+        # Adaptive damping — damp harder when system is energetic
+        max_force = 0.0
+        for i in range(dict_size):
+            f = _numba_norm(net_spring_force[i])
+            if f > max_force:
+                max_force = f
+
+        adaptive_damping = damping_ratio
+        if max_force > base_length * 10:
+            adaptive_damping = damping_ratio * 0.1  # heavy damping when explosive
+        elif max_force > base_length * 2:
+            adaptive_damping = damping_ratio * 0.5  # moderate damping
+
+        cooling_factor = 1.0 - (iteration / iterations) * 0.5  # linearly cool to 50%
+        net_velocity = adaptive_damping * (net_velocity + spring_coefficient * net_spring_force * cooling_factor)
+
+        for k in prange(dict_size):
+            speed = _numba_norm(net_velocity[k])
+            if speed > max_velocity:
+                net_velocity[k] = net_velocity[k] * (max_velocity / speed)
 
         equilibrium = 1
         for c in range(dict_size):  # Check if particles are within tolerance
@@ -128,7 +159,8 @@ def _numba_spring_adjustment(graph: np.array,
 
 @njit(parallel=True, fastmath=True, cache=True)
 def _find_pixel_centroids(num_coordinates: int,
-                          pixel_matrix: np.array):
+                          pixel_matrix: np.array,
+                          scale_down: int):
     coordinate_array = np.zeros((num_coordinates, 2), dtype=np.uint16)
     shape_x, shape_y = np.shape(pixel_matrix)
 
@@ -141,8 +173,8 @@ def _find_pixel_centroids(num_coordinates: int,
             x_sum += np.mod(offset[0] + x, shape_x)
             y_sum += np.mod(offset[1] + y, shape_y)
 
-        coordinate_array[i][0] = np.mod(np.subtract(x_sum / len(where_list), offset[0]), shape_x)
-        coordinate_array[i][1] = np.mod(np.subtract(y_sum / len(where_list), offset[1]), shape_y)
+        coordinate_array[i][0] = np.mod(np.subtract(x_sum / len(where_list), offset[0]), shape_x) * scale_down
+        coordinate_array[i][1] = np.mod(np.subtract(y_sum / len(where_list), offset[1]), shape_y) * scale_down
 
     return coordinate_array
 
@@ -155,7 +187,8 @@ class DreamAtlasGraph:
         self.graph = np.zeros((size, size), dtype=np.bool_)
         self.coordinates = np.zeros((size, 2), dtype=np.int32)
         self.darts = np.zeros((size, size, 2), dtype=np.int8)
-        self.weights = np.ones(size, dtype=np.float32)
+        self.fixed = np.zeros(size, dtype=np.bool_)
+        self.weights = np.ones(size, dtype=np.int8)
         self.planes = np.ones(size, dtype=np.int8)
         self.map_size = map_size
         self.wraparound = wraparound
@@ -402,7 +435,7 @@ class DreamAtlasGraph:
         for i, j in self.get_all_connections():  # Set the darts for the graph
             self.darts[i, j] = dart_dict[(i, j)]
 
-    def embed_disciples(self, teams, seed):
+    def embed_disciples(self, teams, nation_list, one_pond, seed):
 
         teams_graph = ntx.Graph()
         target_graph = ntx.Graph(incoming_graph_data=self.graph)
@@ -415,6 +448,17 @@ class DreamAtlasGraph:
             for j, k in list(zip(team, team[1:])):
                 teams_graph.add_edge(j, k)
 
+        if one_pond:
+            last_uw_nation = None
+            for nation in nation_list:  # Create the subgraph for the UW nations
+                if nation.layout in [LAYOUT_PREF_ISLAND, LAYOUT_PREF_DEEPS, LAYOUT_PREF_SHALLOWS]:
+                    if last_uw_nation is not None:
+                        teams_graph.add_edge(last_uw_nation.iid, nation.iid)
+                    last_uw_nation = nation
+
+        # ntx.draw(teams_graph, with_labels=True, font_weight='bold')
+        # plt.show()
+
         for i in range(10):
             initial_embedding, worked = mnm.find_embedding(teams_graph, target_graph, return_overlap=True, random_seed=seed)
             if worked:
@@ -424,6 +468,33 @@ class DreamAtlasGraph:
                 print('\033[31mDisciples embedding failed: Trying with new seed (%i)\x1b[0m' % seed)
         if not worked:
             raise Exception('DiscipleEmbeddingError: Failed 10 times')
+
+        for i in nations:  # Assign the players to the graphs to be tracked later
+            for node in initial_embedding[i]:
+                self.index_2_iid[node] = i
+
+    def embed_one_pond_no_disciples(self, nation_list, seed):
+
+        teams_graph = ntx.Graph()
+        target_graph = ntx.Graph(incoming_graph_data=self.graph)
+        nations = set()
+        last_uw_nation = None
+        for nation in nation_list:  # Create the subgraph for the UW nations
+            teams_graph.add_node(nation.iid)
+            if nation.layout in [LAYOUT_PREF_ISLAND, LAYOUT_PREF_DEEPS, LAYOUT_PREF_SHALLOWS]:
+                if last_uw_nation is not None:
+                     teams_graph.add_edge(last_uw_nation.iid, nation.iid)
+                last_uw_nation = nation
+
+        for i in range(10):
+            initial_embedding, worked = mnm.find_embedding(teams_graph, target_graph, return_overlap=True, random_seed=seed)
+            if worked:
+                break
+            else:
+                seed = rd.randint(0, 100000)
+                print('\033[31mOne Pond - No Disciples embedding failed: Trying with new seed (%i)\x1b[0m' % seed)
+        if not worked:
+            raise Exception('NoPondEmbeddingError: Failed 10 times')
 
         for i in nations:  # Assign the players to the graphs to be tracked later
             for node in initial_embedding[i]:
@@ -562,11 +633,18 @@ class DreamAtlasGraph:
         self.coordinates = lloyd.get_points()
 
     def tlaloc_lloyd_relaxation(self,
-                                scale_down: int = 2,
-                                iterations: int = 2):
-        # Iteratively runs a jump flood algorithm on a scaled down version of the map, then adjusts the positions of the
-        # coordinates to the centroids of their shapes. This works as a Lloyd relaxation except that we also incorporate
-        # a distance metric and the toroidal topology.
+                                scale_down: int,
+                                iterations: int) -> None:
+        """
+        Iteratively runs a jump flood algorithm on a scaled down version of the map, then adjusts the positions of the
+        coordinates to the centroids of their shapes. This works as a Lloyd relaxation except that we also incorporate
+        a distance metric and the toroidal topology.
+
+        :param scale_down: The scale down factor for the JFA.
+        :param iterations: The number of iterations to do a tlaloc-lloyd relaxation.
+        :param noise_array: The noise array used in the JFA.
+        """
+
         small_x_size = int(self.map_size[0] / scale_down)
         small_y_size = int(self.map_size[1] / scale_down)
 
@@ -592,11 +670,11 @@ class DreamAtlasGraph:
                                                                                                     distance_matrix=s_distance_matrix,
                                                                                                     vector_matrix=s_vector_matrix)
 
-            self.coordinates = _find_pixel_centroids(len(self.coordinates), small_output_matrix)
+            self.coordinates = _find_pixel_centroids(len(self.coordinates), small_output_matrix, scale_down)
 
     def spring_adjustment(self, iterations=None, ratios=None):
         if ratios is None:
-            ratios = np.array((0.1, 0.5, 50), dtype=np.float32)
+            ratios = np.array((0.85, 0.01, 50), dtype=np.float32)
         if iterations is None:
             iterations = 5 * self.size
         _coordinates, _darts = _numba_spring_adjustment(self.graph, self.coordinates.astype(dtype=np.float64),
@@ -606,9 +684,13 @@ class DreamAtlasGraph:
 
     def get_virtual_graph(self):
 
-        virtual_size = self.size + 1
+        virtual_size = self.size
+        done_edges = set()
         for i, j in self.get_all_connections():
-            virtual_size += np.count_nonzero(self.darts[i, j])
+            if (i, j) in done_edges:  # If we haven't done this connection continue
+                continue
+            # done_edges.add((j, i))
+            virtual_size += 2 * np.count_nonzero(self.darts[i, j])
         virtual_size = int(virtual_size)
 
         virtual_graph = np.zeros((virtual_size, virtual_size), dtype=np.bool_)
@@ -617,88 +699,91 @@ class DreamAtlasGraph:
         for i in range(self.size):
             virtual_coordinates[i] = self.coordinates[i]
 
-        k = len(self.coordinates)
+        k = self.size
         done_edges = set()
-        
-        # fills graph
         for i, j in self.get_all_connections():
-            if (i, j) not in done_edges:  # If we haven't done this connection continue
-                done_edges.add((j, i))
+            if (i, j) in done_edges:  # If we haven't done this connection continue
+                continue
+            done_edges.add((j, i))
 
-                dart_x, dart_y = self.darts[i, j]
+            dart_x, dart_y = self.darts[i, j]
 
-                if dart_x == 0 and dart_y == 0:  # If the connection does not cross the torus then just add the edge
-                    virtual_graph[i, j] = 1
-                    virtual_graph[j, i] = 1
-                else:  # Otherwise we need to find the virtual coordinates
-                    vector = self.get_vector(i, j)
+            if dart_x == 0 and dart_y == 0:  # If the connection does not cross the torus then just add the edge
+                virtual_graph[i, j] = 1
+                virtual_graph[j, i] = 1
+                continue
 
-                    infinite_coordinates = list()  # Find the infinite edge points
-                    for axis in range(2):
-                        if self.darts[i, j][axis] == -1:
-                            ic = 0
-                        elif self.darts[i, j][axis] == 1:
-                            ic = self.map_size[axis]
-                        else:
-                            continue
-                        if axis == 0:
-                            infinite_coordinates.append([ic, self.coordinates[i, 1] + (ic - self.coordinates[i, 0]) * vector[1] / vector[0]])
-                        else:
-                            infinite_coordinates.append([self.coordinates[i, 0] + (ic - self.coordinates[i, 1]) * vector[0] / vector[1], ic])
+            vector = self.get_vector(i, j)  # Otherwise we need to find the virtual coordinates
 
-                    if len(infinite_coordinates) == 2:  # Find which is closer and build virtual graph
-                        virtual_graph[i, k] = 1  # 1st node to 1st edge
-                        virtual_graph[k, i] = 1
+            infinite_coordinates = list()  # Find the infinite edge points
+            for axis in range(2):
+                if self.darts[i, j][axis] == -1:
+                    ic = 0
+                elif self.darts[i, j][axis] == 1:
+                    ic = self.map_size[axis]
+                else:
+                    continue
+                if axis == 0:
+                    infinite_coordinates.append([ic, self.coordinates[i, 1] + (ic - self.coordinates[i, 0]) * vector[1] / vector[0]])
+                else:
+                    infinite_coordinates.append([self.coordinates[i, 0] + (ic - self.coordinates[i, 1]) * vector[0] / vector[1], ic])
 
-                        virtual_graph[k+1, k+2] = 1  # 1st edge to 2nd edge
-                        virtual_graph[k+2, k+1] = 1
-                        if np.linalg.norm(np.subtract(self.coordinates[i], infinite_coordinates[0])) > np.linalg.norm(np.subtract(self.coordinates[i], infinite_coordinates[1])):  # seeing which is closer
-                            infinite_coordinates = [infinite_coordinates[1], infinite_coordinates[0]]
-                            virtual_coordinates[k+1] = [infinite_coordinates[0][0], infinite_coordinates[0][1] - dart_y * self.map_size[1]]
-                            virtual_coordinates[k+2] = [infinite_coordinates[1][0], infinite_coordinates[1][1] - dart_y * self.map_size[1]]
-                        else:
-                            infinite_coordinates = [infinite_coordinates[0], infinite_coordinates[1]]
-                            virtual_coordinates[k+1] = [infinite_coordinates[0][0] - dart_x * self.map_size[0], infinite_coordinates[0][1]]
-                            virtual_coordinates[k+2] = [infinite_coordinates[1][0] - dart_x * self.map_size[0], infinite_coordinates[1][1]]
-                        virtual_coordinates[k] = infinite_coordinates[0]
+            if len(infinite_coordinates) == 2:  # Find which is closer and build virtual graph
+                virtual_graph[i, k] = 1  # 1st node to 1st edge
+                virtual_graph[k, i] = 1
 
-                        virtual_graph[k+3, j] = 1  # 2nd edge to 2nd node
-                        virtual_graph[j, k+3] = 1
-                        virtual_coordinates[k+3] = [infinite_coordinates[1][0] - dart_x * self.map_size[0], infinite_coordinates[1][1] - dart_y * self.map_size[1]]
-                    else:
-                        # crash for script.py happens around here.
-                        #TODO: fix crash? deprecate this?
-                        virtual_graph[i, k] = 1  # Vertex to edge
-                        virtual_graph[k, i] = 1
-                        virtual_coordinates[k] = infinite_coordinates[0]
-                        virtual_graph[k+1, j] = 1  # Edge to connection
-                        virtual_graph[j, k+1] = 1
-                        virtual_coordinates[k+1] = [infinite_coordinates[0][0] - dart_x * self.map_size[0], infinite_coordinates[0][1] - dart_y * self.map_size[1]]
+                virtual_graph[k+1, k+2] = 1  # 1st edge to 2nd edge
+                virtual_graph[k+2, k+1] = 1
+                if np.linalg.norm(np.subtract(self.coordinates[i], infinite_coordinates[0])) > np.linalg.norm(np.subtract(self.coordinates[i], infinite_coordinates[1])):  # seeing which is closer
+                    infinite_coordinates = [infinite_coordinates[1], infinite_coordinates[0]]
+                    virtual_coordinates[k+1] = [infinite_coordinates[0][0], infinite_coordinates[0][1] - dart_y * self.map_size[1]]
+                    virtual_coordinates[k+2] = [infinite_coordinates[1][0], infinite_coordinates[1][1] - dart_y * self.map_size[1]]
+                else:
+                    infinite_coordinates = [infinite_coordinates[0], infinite_coordinates[1]]
+                    virtual_coordinates[k+1] = [infinite_coordinates[0][0] - dart_x * self.map_size[0], infinite_coordinates[0][1]]
+                    virtual_coordinates[k+2] = [infinite_coordinates[1][0] - dart_x * self.map_size[0], infinite_coordinates[1][1]]
+                virtual_coordinates[k] = infinite_coordinates[0]
 
-                    k += 2 * len(infinite_coordinates)
+                virtual_graph[k+3, j] = 1  # 2nd edge to 2nd node
+                virtual_graph[j, k+3] = 1
+                virtual_coordinates[k+3] = [infinite_coordinates[1][0] - dart_x * self.map_size[0], infinite_coordinates[1][1] - dart_y * self.map_size[1]]
+                k += 4
+            elif len(infinite_coordinates) == 1:
+                virtual_graph[i, k] = 1
+                virtual_graph[k, i] = 1
+                virtual_coordinates[k] = infinite_coordinates[0]
+
+                virtual_graph[k + 1, j] = 1
+                virtual_graph[j, k + 1] = 1
+                # Only offset the axis that actually has a dart
+                virtual_coordinates[k + 1] = [
+                    infinite_coordinates[0][0] - dart_x * self.map_size[0],
+                    infinite_coordinates[0][1] - dart_y * self.map_size[1]
+                ]
+                k += 2
 
         return virtual_graph, virtual_coordinates
 
-    def plot(self):
-
-        import matplotlib.pyplot as plt
-        fig, ax = plt.subplots()
-
-        for i, j in self.get_all_connections():
-            x1, y1 = self.coordinates[i]
-            x2, y2 = self.coordinates[j] + self.darts[i, j] * self.map_size
-
-            colour = 'k-'
-            if self.planes[i] != self.planes[j]:
-                colour = 'k--'
-
-            ax.plot((x1, x2), (y1, y2), colour)
-
-        for i, (x, y) in enumerate(self.coordinates):
-            ax.plot(x, y, self.plot_colour[i])
-            ax.text(x+5, y+5, s=f'{i}')
-
-        ax.set(xlim=(0, self.map_size[0]), ylim=(0, self.map_size[1]))
-        ax.set_aspect('equal')
-
-        return ax
+    # def plot(self):
+    #
+    #     import matplotlib.pyplot as plt
+    #     fig, ax = plt.subplots()
+    #
+    #     for i, j in self.get_all_connections():
+    #         x1, y1 = self.coordinates[i]
+    #         x2, y2 = self.coordinates[j] + self.darts[i, j] * self.map_size
+    #
+    #         colour = 'k-'
+    #         if self.planes[i] != self.planes[j]:
+    #             colour = 'k--'
+    #
+    #         ax.plot((x1, x2), (y1, y2), colour)
+    #
+    #     for i, (x, y) in enumerate(self.coordinates):
+    #         ax.plot(x, y, self.plot_colour[i])
+    #         ax.text(x+5, y+5, s=f'{i}')
+    #
+    #     ax.set(xlim=(0, self.map_size[0]), ylim=(0, self.map_size[1]))
+    #     ax.set_aspect('equal')
+    #
+    #     return ax

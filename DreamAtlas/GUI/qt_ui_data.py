@@ -28,7 +28,7 @@ QTreeWidget::item:selected {
 QScrollArea {
     background-color: #181825;
     border: none;
-    color: #181825;
+    color: #F7D018;
 }
 QScrollBar:vertical {
     background: #181825;
@@ -80,9 +80,8 @@ QSplitter::handle { background: #45475a; }
 
 UI_CONFIG_PROVINCE = {
     'label_frames': [
-        ['Province info', ['index', 'name', 'unrest', 'population']],
+        ['Province info', ['index', 'name', 'unrest', 'population', 'poptype', 'fort']],
         ['Terrain', ['terrain_int']],
-        ['Province info', ['poptype', 'fort']],
         ['Province attributes', ['killfeatures', 'temple', 'lab']]],
     'buttons': [0, 5],
     'attributes': {
@@ -120,8 +119,8 @@ UI_CONFIG_SETTINGS = {
     'label_frames': [
         ['Map Info', ['map_title', 'seed']],
         ['General Settings', ['art_style', 'pop_balancing', 'site_frequency', 'cap_connections', 'player_neighbours']],
-        ['Region Settings', ['homeland_size', 'periphery_size', 'throne_region_num', 'water_region_num', 'cave_region_num', 'vast_region_num', 'water_region_type', 'cave_region_type']],
-        ['Additional Options', ['disciples', 'omniscience']],
+        ['Region Settings', ['homeland_size', 'periphery_size', 'throne_region_num', 'vast_region_num', 'water_region_num', 'cave_region_num', 'water_region_type', 'cave_region_type']],
+        ['Additional Options', ['disciples', 'omniscience', 'one_pond']],
         ['Nations & Teams', ['vanilla_nations']],
         ['Generic/Custom Nations', ['custom_nations']],
         ['Estimates', ['generation_info']]],
@@ -146,6 +145,7 @@ UI_CONFIG_SETTINGS = {
         'vast_region_num': [int, 2, 'Vast Regions', [0, 30], 1, 'Select the number of vast regions\nThese regions are empty and uncontrollable but can be traversed'],
 
         'disciples': [int, 3, 'Disciples', None, 1, 'Toggle disciples mode'],
+        'one_pond': [int, 3, 'One Pond', None, 1, 'Make all underwater nations border each other'],
         'omniscience': [int, 3, 'Omniscience', None, 1, 'Toggle creating a hidden omniscience start'],
 
         'vanilla_nations': [list, 4, 'Nations & Teams', None, 1, 'Select the vanilla nations and teams\nOnly nations from the selected age will be used'],
@@ -153,16 +153,64 @@ UI_CONFIG_SETTINGS = {
     }
 }
 
+UI_CONFIG_CUSTOMNATION = {
+    'label_frames': [
+        ['Nation Info', ['index', 'name', 'tagline']],
+        ['Capital Terrain', ['terrain']],
+        ['Homeland Info', ['terrain_profile', 'layout', 'home_plane']]],
+    'buttons': [1, 5, 6],
+    'attributes': {
+        'index': [int, 0, 'Nation Number', None, 1, 'Enter the unique number for the nation'],
+        'name': [str, 0, 'Name', None, 1, 'Enter the name of the nation'],
+        'tagline': [str, 0, 'Tagline', None, 1, 'Enter a short description or slogan for the nation'],
+
+        'terrain': [int, 7, 'Capital Terrain', None, 1, 'Select the terrain type for the nation\'s capital'],
+
+        'terrain_profile': [int, 1, 'Terrain Preference', ['Balanced', 'Plains', 'Forest', 'Mountains', 'Desert', 'Swamp', 'Karst'], 1, 'Select the preferred terrain type for the nation'],
+        'layout': [int, 1, 'Layout', ['Land', 'Cave', 'Coast', 'Island', 'Deeps', 'Shallows', 'Lakes'], 1, 'Select the layout type for the nation\'s homeland'],
+        'home_plane': [int, 1, 'Home Plane', ['Surface', 'Underground'], 1, 'Select the plane where the nation resides']
+    }
+}
+
+UI_CONFIG_GENERICNATION = {
+    'label_frames': [
+        ['Capital Terrain', ['terrain']],
+        ['Info', ['terrain_profile', 'layout', 'home_plane']]],
+    'buttons': [1, 5, 6],
+    'attributes': {
+
+        'terrain': [int, 7, 'Capital Terrain', None, 1, 'Select the terrain type for the nation\'s capital'],
+
+        'terrain_profile': [int, 1, 'Terrain Preference', ['Balanced', 'Plains', 'Forest', 'Mountains', 'Desert', 'Swamp', 'Karst'], 1, 'Select the preferred terrain type for the nation'],
+        'layout': [int, 1, 'Layout', ['Land', 'Cave', 'Coast', 'Island', 'Deeps', 'Shallows', 'Lakes'], 1, 'Select the layout type for the nation\'s homeland'],
+        'home_plane': [int, 1, 'Home Plane', ['Surface', 'Underground'], 1, 'Select the plane where the nation resides']
+    }
+}
+
 
 INTERFACE_TITLE = "DreamAtlas v2.0.0"
-INTERFACE_ICON = 'DreamAtlas/databases/ui_images/DreamAtlasLogoSquare.png'
 
 EXPLORER_REGIONS = ["Homelands", "Peripheries", "Thrones", "Water", "Caves", "Vasts", "Blockers"]
 
 CONNECTION_COLOURS = {0: 'yellow', 33: 'red', 2: 'blue', 4: '#808080', 8: 'green', 16: 'cyan', 36: '#808080'}
 
 DISPLAY_OPTIONS = ['Show Nodes', 'Show Connections', 'Show Borders', 'Show Capitals', 'Show Thrones', 'Terrain Icons']
-DISPLAY_TAGS = ['nodes', 'connections', 'borders', 'capitals', 'thrones', 'info']
+DISPLAY_TAGS = ['nodes', 'connections', 'borders', 'capitals', 'thrones', 'terrain']
 DISPLAY_STATES = [1, 1, 1, 1, 1, 1]
 
 LENSE_KEY = {'z': 0, 'x': 1, 'c': 2, 'v': 3, 'b': 4, 'n': 5}
+
+TEAMS = ['-', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20']
+TERRAIN_PRIMARY = [
+    [None, 0, 'Plains'], [2, 4, 'Sea'], [3, 8, 'Freshwater'], [4, 16, 'Highlands/Gorge'], [5, 32, 'Swamp'], [6, 64, 'Waste'],
+    [7, 128, 'Forest/Kelp'], [8, 256, 'Farm'], [11, 2048, 'Deep sea'], [12, 4096, 'Cave'], [23, 8388608, 'Mountains'],
+    [30, 1073741824, 'Warmer'], [31, 2147483648, 'Colder'], [33, 8589934592, 'Vast'],
+    [34, 17179869184, 'Infernal waste'], [35, 34359738368, 'Void'], [38, 274877906944, 'Flooded']
+]
+CAVE_REGIONS = ['None', 'Grottos', 'Tunnels', 'Caverns']
+WATER_REGIONS = ['None', 'Lakes', 'Seas', 'Oceans']
+
+TOOLTIP_DELAY = 500
+
+INPUT_ENTRY_SIZE = 275
+UI_CONNECTION_COLOURS = {0: 'black', 33: 'red', 2: 'blue', 4: 'grey', 8: 'green', 16: 'brown', 36: 'red', 3: 'pink'}  # [0, 'Standard border'], [33, 'Mountain pass'], [2, 'River border'], [4, 'Impassable'], [8, 'Road'], [16, 'River bridge'], [36, 'Impassable mountain'], [3, 'Waterfalls']

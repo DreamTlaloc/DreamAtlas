@@ -1,12 +1,9 @@
-import threading
-import queue
-
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QProgressBar, QLabel
 )
-from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
 
-from ..generators import generator_dreamatlas
+from ..generators.DreamAtlas_map_generator import generator_dreamatlas
 
 
 class GeneratorThread(QThread):  # Worker thread — replaces ThreadedGenerator

@@ -1,5 +1,4 @@
 import sys
-from pathlib import Path
 from PIL import Image
 import numpy as np
 
@@ -7,31 +6,35 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QSplitter,
     QGroupBox, QVBoxLayout, QHBoxLayout, QGridLayout,
     QTreeWidget, QTreeWidgetItem,
-    QGraphicsView, QGraphicsScene, QGraphicsEllipseItem, QGraphicsLineItem,
     QCheckBox, QPushButton, QButtonGroup,
-    QScrollArea, QLabel, QSizePolicy,
-    QMenuBar, QMenu, QFileDialog, QAbstractItemView, QAction, QShortcut
+    QScrollArea, QSizePolicy,
+    QFileDialog, QAbstractItemView, QAction, QShortcut
 )
 from PyQt5.QtGui import (
     QPixmap, QImage, QColor, QPen, QBrush,
-    QKeySequence, QIcon
+    QKeySequence, QIcon, QPainter
 )
-from PyQt5.QtCore import Qt, QRectF, QPointF, pyqtSignal
+from PyQt5.QtCore import Qt
 
-from .qt_dream_widgets import QtInputWidget, QtInputToplevel
-from .qt_ui_data import THEME_FANTASY, INTERFACE_TITLE, INTERFACE_ICON, LENSE_KEY, DISPLAY_OPTIONS, \
+from .qt_dream_widgets import QtInputWidget, QtInputToplevel, MapCanvas, HoverLineItem, HoverEllipseItem
+from .qt_ui_data import THEME_FANTASY, INTERFACE_TITLE, LENSE_KEY, DISPLAY_OPTIONS, \
     DISPLAY_TAGS, DISPLAY_STATES, EXPLORER_REGIONS, CONNECTION_COLOURS, UI_CONFIG_PROVINCE, UI_CONFIG_CONNECTION, \
     UI_CONFIG_SETTINGS
-from ..classes import DominionsMap, DreamAtlasSettings, Province, Connection
-from ..databases import ROOT_DIR, LOAD_DIR
-from ..functions import has_terrain, provinces_2_colours, pixel_matrix_2_borders_array, pixel_matrix_2_bitmap_arrays
+from ..classes.class_map import DominionsMap
+from ..classes.class_settings import DreamAtlasSettings
+from ..classes.class_province import Province
+from ..classes.class_connection import Connection
+from ..databases.dreamatlas_data import ROOT_DIR, LOAD_DIR, ART_ICON
+
+from ..functions.minor_functions import has_terrain, provinces_2_colours
+from ..functions.numba_pixel_mapping import pixel_matrix_2_borders_array, pixel_matrix_2_bitmap_arrays
 
 
 class QtMainInterface(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(INTERFACE_TITLE)
-        self.setWindowIcon(QIcon(INTERFACE_ICON))
+        self.setWindowIcon(QIcon(str(ART_ICON)))
 
         self.map = DominionsMap()
         self.settings = DreamAtlasSettings(index=0)
@@ -51,10 +54,30 @@ class QtMainInterface(QMainWindow):
         self._plane_group = QButtonGroup(self)
 
         self.editor_focus = None
+        self._selected_item = None
 
         self._build_menu()
         self._build_gui()
+        self._bind_keys()
         self.generate_dreamatlas()
+
+        self.throne_pixmap = QPixmap(str(ROOT_DIR / 'databases/ui_images/throne.png'))
+        self.capital_pixmap = QPixmap(str(ROOT_DIR / 'databases/ui_images/capital.png'))
+        self.terrain_pixmaps = {
+            16        : QPixmap(str(ROOT_DIR / 'databases/ui_images/highland.png')),
+            32        : QPixmap(str(ROOT_DIR / 'databases/ui_images/swamp.png')),
+            64        : QPixmap(str(ROOT_DIR / 'databases/ui_images/waste.png')),
+            128       : QPixmap(str(ROOT_DIR / 'databases/ui_images/forest.png')),
+            256       : QPixmap(str(ROOT_DIR / 'databases/ui_images/farm.png')),
+            4         : QPixmap(str(ROOT_DIR / 'databases/ui_images/sea.png')),
+            2052      : QPixmap(str(ROOT_DIR / 'databases/ui_images/deep.png')),
+            132       : QPixmap(str(ROOT_DIR / 'databases/ui_images/kelp.png')),
+            4096      : QPixmap(str(ROOT_DIR / 'databases/ui_images/cave.png')),
+            4128      : QPixmap(str(ROOT_DIR / 'databases/ui_images/drip.png')),
+            4160      : QPixmap(str(ROOT_DIR / 'databases/ui_images/crystal.png')),
+            4224      : QPixmap(str(ROOT_DIR / 'databases/ui_images/mushroom.png')),
+            8589934592: QPixmap(str(ROOT_DIR / 'databases/ui_images/vast.png')),
+        }
 
     def _build_menu(self):
         menubar = self.menuBar()
@@ -103,7 +126,7 @@ class QtMainInterface(QMainWindow):
         splitter.addWidget(viewer_widget)
         editor_widget = QWidget()
         splitter.addWidget(editor_widget)
-        splitter.setSizes([280, 1090, 520])
+        splitter.setSizes([230, 1320, 370])
 
         # Explorer setup
         explorer_layout = QVBoxLayout(explorer_widget)
@@ -116,7 +139,7 @@ class QtMainInterface(QMainWindow):
         self.explorer_panel = QTreeWidget()
         self.explorer_panel.setHeaderHidden(True)
         self.explorer_panel.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        # self.explorer_panel.itemSelectionChanged.connect(self._on_item_selected)
+        self.explorer_panel.itemSelectionChanged.connect(self._on_item_selected)
         eg_layout.addWidget(self.explorer_panel)
 
         explorer_layout.addWidget(explorer_group)
@@ -129,9 +152,9 @@ class QtMainInterface(QMainWindow):
         vg_layout = QVBoxLayout(viewer_group)
         vg_layout.setContentsMargins(3, 8, 3, 3)
 
-        # self.viewing_canvas = MapCanvas()
-        # self.viewing_canvas.province_right_clicked.connect(self._on_right_click)
-        # vg_layout.addWidget(self.viewing_canvas)
+        self.viewing_canvas = MapCanvas()
+        self.viewing_canvas.province_right_clicked.connect(self._on_right_click)
+        vg_layout.addWidget(self.viewing_canvas)
 
         viewer_layout.addWidget(viewer_group)
 
@@ -161,7 +184,7 @@ class QtMainInterface(QMainWindow):
             active = DISPLAY_STATES[i]
             cb = QCheckBox(option)
             cb.setEnabled(False)
-            # cb.stateChanged.connect(self.refresh_view)
+            cb.stateChanged.connect(self.refresh_view)
             display_grid.addWidget(cb, i // 4, i % 4)
             self.display_options.append((cb, tag, active))
 
@@ -182,7 +205,7 @@ class QtMainInterface(QMainWindow):
             lense_layout.addWidget(btn)
             self.lense_options.append(btn)
 
-        # self._lense_group.idClicked.connect(self._on_lense_changed)
+        self._lense_group.buttonClicked.connect(self._on_lense_changed)
         editor_layout.addWidget(lense_group, stretch=1)
 
         # Plane buttons
@@ -200,7 +223,8 @@ class QtMainInterface(QMainWindow):
             plane_layout.addWidget(btn)
             self.plane_options.append(btn)
 
-        # self._plane_group.idClicked.connect(self._on_plane_changed)
+        self._plane_group.buttonClicked.connect(self._on_plane_changed)
+
         editor_layout.addWidget(plane_group, stretch=1)
 
     def update_explorer_panel(self):
@@ -230,6 +254,9 @@ class QtMainInterface(QMainWindow):
         self.explorer_panel.expandToDepth(0)
 
     def update_viewing_panel(self):
+        if self._selected_item is not None:
+            self._selected_item.set_selected(False)
+            self._selected_item = None
         self.viewing_canvas.clear_scene()
 
         if self.empty:
@@ -249,14 +276,19 @@ class QtMainInterface(QMainWindow):
 
             # --- Province bitmaps ---
             for i, (x, y), array in pixel_matrix_2_bitmap_arrays(self.map.pixel_map[plane]):
-                pil_img = Image.fromarray(array, mode='L').convert('RGBA')
+                pil_img = Image.fromarray(array, mode='L')
                 pil_img = pil_img.transpose(Image.Transpose.ROTATE_90)
-                px = self.pil_to_qpixmap(pil_img)
+
+                # Use the greyscale values as alpha — province pixels opaque, rest transparent
+                rgba = Image.new('RGBA', pil_img.size, (255, 255, 255, 255))
+                rgba.putalpha(pil_img)  # white pixels become opaque, black become transparent
+
+                px = self.pil_to_qpixmap(rgba)
                 item = scene.addPixmap(px)
-                item.setPos(x, map_h - y)
+                item.setPos(x, map_h - y - px.height())
                 item.setVisible(False)
-                item.setData(0, i)  # province index
-                item.setData(1, plane)  # plane
+                item.setData(0, i)
+                item.setData(1, plane)
                 item.setData(2, 'bitmap')
                 self.viewing_canvas._bitmaps[plane].append((i, item, px))
 
@@ -276,16 +308,15 @@ class QtMainInterface(QMainWindow):
                     self.map.image_file[plane], art_item, px_normal, px_trans
                 )
 
-            # --- Borders ---
-            border_arr = pixel_matrix_2_borders_array(self.map.pixel_map[plane], thickness=3)
+            border_arr = pixel_matrix_2_borders_array(self.map.pixel_map[plane], thickness=2)
             border_img = Image.fromarray(np.flip(border_arr.transpose(), axis=0), mode='L').convert('RGBA')
-            # Colour black pixels, make white pixels transparent
+
             r, g, b, a = border_img.split()
             border_img = Image.merge('RGBA', (
                 Image.new('L', border_img.size, 0),
                 Image.new('L', border_img.size, 0),
                 Image.new('L', border_img.size, 0),
-                r,  # use luminance channel as alpha mask
+                r,
             ))
             border_px = self.pil_to_qpixmap(border_img)
             border_item = scene.addPixmap(border_px)
@@ -302,7 +333,7 @@ class QtMainInterface(QMainWindow):
             done_nodes = set()
             for i, (x1, y1) in enumerate(virtual_coordinates):
                 for j in np.argwhere(virtual_graph[i, :] == 1):
-                    j = int(j)
+                    j = int(j[0])
                     colour = CONNECTION_COLOURS[0]
                     for connection in self.map.connection_list[plane]:
                         if {i + 1, j + 1} == connection.connected_provinces:
@@ -311,30 +342,37 @@ class QtMainInterface(QMainWindow):
 
                     if j not in done_nodes:
                         x2, y2 = virtual_coordinates[j]
-                        pen = QPen(QColor(colour), 6, Qt.PenStyle.DashLine)
-                        line = scene.addLine(x1, map_h - y1, x2, map_h - y2, pen)
+                        normal_pen = QPen(QColor(colour), 6, Qt.DashLine)
+                        hover_pen = QPen(QColor('#F7D018'), 8, Qt.DashLine)  # thicker white on hover
+
+                        line = HoverLineItem(x1, map_h - y1, x2, map_h - y2, normal_pen, hover_pen)
                         line.setVisible(False)
-                        line.setData(0, connection)  # store connection obj for right-click
+                        line.setData(0, connection)
                         line.setData(1, plane)
                         line.setData(2, 'connections')
+                        scene.addItem(line)  # use addItem instead of addLine for custom classes
                         self.viewing_canvas._connections[plane].append((connection, line))
 
                 if i < self.map.layout.province_graphs[plane].size:
-                    ellipse = scene.addEllipse(
+                    normal_pen = QPen(Qt.black, 3)
+                    normal_brush = QBrush(Qt.white)
+                    hover_pen = QPen(QColor('#F7D018'), 4)
+                    hover_brush = QBrush(QColor('#F7D018'))  # lighter red on hover
+
+                    ellipse = HoverEllipseItem(
                         x1 - 12, map_h - y1 - 12, 24, 24,
-                        QPen(Qt.GlobalColor.white, 3),
-                        QBrush(Qt.GlobalColor.red)
+                        normal_pen, normal_brush,
+                        hover_pen, hover_brush
                     )
                     ellipse.setVisible(False)
                     ellipse.setData(1, plane)
                     ellipse.setData(2, 'nodes')
-                    # Store province object for right-click detection
                     if i < len(self.map.province_list[plane]):
                         ellipse.setData(0, self.map.province_list[plane][i])
+                    scene.addItem(ellipse)
                     self.viewing_canvas._nodes[plane].append((i + 1, ellipse))
                 done_nodes.add(i)
 
-            # --- Icons (thrones, capitals, terrain) ---
             for province in self.map.province_list[plane]:
                 x = province.coordinates[0]
                 y = map_h - province.coordinates[1]
@@ -399,6 +437,8 @@ class QtMainInterface(QMainWindow):
         if self.editor_focus is not None:
             self.editor_focus.class_2_input()
             self.editor_layout.addWidget(self.editor_focus)
+            QApplication.processEvents()  # let Qt calculate the layout geometry
+            self.editor_focus._make_size()
 
     def update_plane_lense_panels(self):
         if self.empty:
@@ -423,7 +463,6 @@ class QtMainInterface(QMainWindow):
 
         new_plane = self._selected_plane
 
-        # Disable Art lense if no image for this plane
         if self.viewing_canvas._photoimages.get(new_plane) is None:
             self.lense_options[0].setEnabled(False)
             if self._selected_lense == 0:
@@ -434,49 +473,77 @@ class QtMainInterface(QMainWindow):
 
         new_lense = self._selected_lense
 
+        # Build a quick lookup of which tags are enabled
+        tag_enabled = {tag: (cb.isChecked() and cb.isEnabled())
+                       for cb, tag, active in self.display_options}
+
         for plane in self.map.planes:
             is_active = (plane == new_plane)
 
-            # Hide all items for inactive planes
-            for item in self.viewing_canvas._scene.items():
-                if item.data(1) == plane and not is_active:
-                    item.setVisible(False)
-
+            # Hide everything on inactive planes
             if not is_active:
+                for item in self.viewing_canvas._scene.items():
+                    if item.data(1) == plane:
+                        item.setVisible(False)
                 continue
 
-            art_active = new_lense == 0
-
-            # Update bitmap colours for the selected lense
+            # Bitmaps
             if new_lense != self.current_lense or new_plane != self.current_plane:
                 for i, item, _px in self.viewing_canvas._bitmaps.get(plane, []):
-                    # Recolour: create a tinted copy of the pixmap
                     colour_str = self.viewing_canvas._bitmap_colors[plane][i - 1][new_lense]
                     color = QColor(colour_str)
                     tinted = QPixmap(_px.size())
-                    tinted.fill(color)
+                    tinted.fill(Qt.transparent)
+                    painter = QPainter(tinted)
+                    painter.drawPixmap(0, 0, _px)
+                    painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
+                    painter.fillRect(tinted.rect(), color)
+                    painter.end()
                     if new_lense != 0:
                         item.setPixmap(tinted)
                         item.setVisible(True)
+                    else:
+                        item.setVisible(False)
 
             # Art layer
+            art_active = new_lense == 0
             photo_data = self.viewing_canvas._photoimages.get(plane)
             if photo_data is not None:
                 _path, art_item, px_normal, px_trans = photo_data
                 art_item.setPixmap(px_normal if art_active else px_trans)
                 art_item.setVisible(True)
 
-            # Display option toggles
-            for cb, tag, active in self.display_options:
-                for item in self.viewing_canvas._scene.items():
-                    if item.data(1) == plane and item.data(2) == tag:
-                        if cb.isChecked():
-                            item.setVisible(active)
-                        else:
-                            item.setVisible(False)
+            # Borders
+            border_data = self.viewing_canvas._borders.get(plane)
+            if border_data is not None:
+                border_item, _ = border_data
+                border_item.setVisible(tag_enabled.get('borders', False))
+
+            # Connections
+            for connection, line in self.viewing_canvas._connections.get(plane, []):
+                line.setVisible(tag_enabled.get('connections', False))
+
+            # Nodes
+            for idx, ellipse in self.viewing_canvas._nodes.get(plane, []):
+                ellipse.setVisible(tag_enabled.get('nodes', False))
+
+            # Icons
+            for icon in self.viewing_canvas._icons.get(plane, []):
+                tag = icon.data(2)
+                icon.setVisible(tag_enabled.get(tag, False))
 
         self.current_plane = new_plane
         self.current_lense = new_lense
+
+    def update_gui(self):
+
+        self.empty = False
+
+        self.update_explorer_panel()
+        self.update_viewing_panel()
+        self.update_editor_panel()
+        self.update_plane_lense_panels()
+        self.refresh_view()
 
     def generate_dreamatlas(self):
         init_settings = DreamAtlasSettings(0)
@@ -487,19 +554,29 @@ class QtMainInterface(QMainWindow):
             ui_config=UI_CONFIG_SETTINGS,
             target_class=init_settings,
             map=self.map,
-            geometry="1000x1000"
+            geometry="720x1000"
         )
 
     def clear_map(self):
         x = 1
 
     def load_map(self):
-        path, _ = QFileDialog.getExistingDirectory(self, str(LOAD_DIR))
+        path = QFileDialog.getExistingDirectory(self, "Load Map Folder", str(LOAD_DIR))
+        if path:
+            self.map.load_folder(path)
+            self.update_gui()
         self.map.load_folder(path)
         self.update_gui()
 
-    def save_map(self, folder: str):
-        self.map.publish(folder)
+    def save_map(self):
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Map",
+            str(LOAD_DIR / self.map.map_title),  # default filename from map title
+            ""  # no filter needed
+        )
+        if path:
+            self.map.publish(path)
 
     def _bind_keys(self):
 
@@ -510,6 +587,31 @@ class QtMainInterface(QMainWindow):
         for char, lense_index in LENSE_KEY.items():
             sc = QShortcut(QKeySequence(char), self)
             sc.activated.connect(lambda li=lense_index: self._on_lense_key(li))
+
+    def _on_right_click(self, obj):
+        # Deselect previous item
+        if self._selected_item is not None:
+            self._selected_item.set_selected(False)
+            self._selected_item = None
+
+        self.focus = obj
+
+        # Find the graphics item that was clicked and start it flashing
+        plane = self._selected_plane
+        if isinstance(obj, Province):
+            for idx, ellipse in self.viewing_canvas._nodes.get(plane, []):
+                if ellipse.data(0) is obj:
+                    ellipse.set_selected(True)
+                    self._selected_item = ellipse
+                    break
+        elif isinstance(obj, Connection):
+            for connection, line in self.viewing_canvas._connections.get(plane, []):
+                if connection is obj:
+                    line.set_selected(True)
+                    self._selected_item = line
+                    break
+
+        self.update_editor_panel()
 
     def _on_plane_key(self, plane: int):
         if plane not in self.map.planes:
@@ -527,12 +629,39 @@ class QtMainInterface(QMainWindow):
             btn.setChecked(True)
         self.refresh_view()
 
-    def _on_lense_changed(self, lense_id: int):
-        self._selected_lense = lense_id
-        self.refresh_view()
+    def _on_item_selected(self):
+        selected = self.explorer_panel.selectedItems()
+        if not selected:
+            return
 
-    def _on_plane_changed(self, plane_id: int):
-        self._selected_plane = plane_id
+        province = selected[0].data(0, Qt.ItemDataRole.UserRole)
+        if province is None:
+            return
+
+        # Deselect previous item
+        if self._selected_item is not None:
+            self._selected_item.set_selected(False)
+            self._selected_item = None
+
+        self.focus = province
+        self._selected_plane = int(province.plane)
+        btn = self._plane_group.button(int(province.plane))
+        if btn:
+            btn.setChecked(True)
+
+        # Find and flash the corresponding node on the map
+        plane = self._selected_plane
+        for idx, ellipse in self.viewing_canvas._nodes.get(plane, []):
+            if ellipse.data(0) is province:
+                ellipse.set_selected(True)
+                self._selected_item = ellipse
+                # Scroll map to the province
+                fx = province.coordinates[0] / self.map.map_size[plane][0]
+                fy = province.coordinates[1] / self.map.map_size[plane][1]
+                self.viewing_canvas.scroll_to_fraction(fx, fy)
+                break
+
+        self.update_editor_panel()
         self.refresh_view()
 
     def pil_to_qpixmap(self, pil_image: Image.Image) -> QPixmap:
@@ -543,11 +672,43 @@ class QtMainInterface(QMainWindow):
         qimg = QImage(data, pil_image.width, pil_image.height, QImage.Format.Format_RGBA8888)
         return QPixmap.fromImage(qimg)
 
+    # With these methods:
+    def _on_lense_clicked(self, btn):
+        lense_id = self._lense_group.id(btn)
+        self._on_lense_changed(lense_id)
+
+    def _on_plane_changed(self, btn_or_id):
+        # Clear selection when switching planes
+        if self._selected_item is not None:
+            self._selected_item.set_selected(False)
+            self._selected_item = None
+
+        if isinstance(btn_or_id, QPushButton):
+            self._selected_plane = self._plane_group.id(btn_or_id)
+        else:
+            self._selected_plane = int(btn_or_id)
+        self.refresh_view()
+
+    def _on_lense_changed(self, btn_or_id):
+        if isinstance(btn_or_id, QPushButton):
+            self._selected_lense = self._lense_group.id(btn_or_id)
+        else:
+            self._selected_lense = int(btn_or_id)
+        self.refresh_view()
+
+    def _on_plane_changed(self, btn_or_id):
+        if isinstance(btn_or_id, QPushButton):
+            self._selected_plane = self._plane_group.id(btn_or_id)
+        else:
+            self._selected_plane = int(btn_or_id)
+        self.refresh_view()
+
 
 def run_qt_interface():
     app = QApplication(sys.argv)
     app.setStyleSheet(THEME_FANTASY)
-    app.setWindowIcon(QIcon(INTERFACE_ICON))
+    print(ART_ICON)
+    app.setWindowIcon(QIcon(str(ART_ICON)))
 
     window = QtMainInterface()
     window.showMaximized()

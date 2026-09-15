@@ -1,15 +1,11 @@
-import random as rd
 from copy import copy
-
-import matplotlib.pyplot as plt
-import numpy as np
-import scipy.cluster.vq as sccvq
-
 from .graph import DreamAtlasGraph
 from .class_connection import Connection
+from .class_settings import DreamAtlasSettings
+from ..functions.minor_functions import *
+from ..databases.dominions_data import *
+from ..databases.dreamatlas_data import *
 
-from DreamAtlas.functions import *
-from DreamAtlas.databases import *
 
 class DominionsLayout:
 
@@ -80,7 +76,9 @@ class DominionsLayout:
         while attempt < allowed_attempts:
             self.region_graph.embed_graph(initial_graph, seed)
             if settings.disciples:
-                self.region_graph.embed_disciples(teams, seed)  # Embed disciples into the graph
+                self.region_graph.embed_disciples(teams, nation_list, settings.one_pond, seed)  # Embed disciples into the graph
+            elif settings.one_pond:
+                self.region_graph.embed_one_pond_no_disciples(nation_list, seed)
 
             failed = False
             for axis in range(2):
@@ -99,7 +97,7 @@ class DominionsLayout:
         elif attempt > 1:
             print(f"Successful embedding with seed {seed} on attempt {attempt}")
 
-        self.region_graph.spring_adjustment(ratios=np.array((0.01, 0.8, 200), dtype=np.float32), iterations=3000)
+        self.region_graph.spring_adjustment(ratios=np.array((0.85, 0.01, 50), dtype=np.float32), iterations=3000)
         # self.plot()
         # plt.show()
 
@@ -120,6 +118,7 @@ class DominionsLayout:
                         (settings.cave_region_num, 4, 'cave'),
                         (settings.vast_region_num, 5, 'vast')]
 
+        import scipy.cluster.vq as sccvq
         extras = False
         for region_num, region_type, region_name in region_types:
             if region_num == 0:
@@ -170,8 +169,7 @@ class DominionsLayout:
                     r += 1
 
         # Add Blocker regions - mountain blocker regions go into non-triangular surface faces then cave walls between cave regions
-        # faces, centroids = self.region_graph.get_faces_centroids(planes=[1])
-        faces = set()
+        faces, centroids = self.region_graph.get_faces_centroids(planes=[1])
         for i, face in enumerate(faces):
             if len(face) > 3:
                 self.region_graph.insert_face(face, r, centroids[i])
@@ -199,8 +197,8 @@ class DominionsLayout:
             self.region_types[r] = 8
             r += 1
 
-        self.region_graph.lloyd_relaxation(iterations=3)
-        self.region_graph.spring_adjustment(ratios=np.array((0.01, 0.8, 100), dtype=np.float32), iterations=3000)
+        # self.region_graph.lloyd_relaxation(iterations=5)
+        # self.region_graph.spring_adjustment(ratios=np.array((0.85, 0.01, 50), dtype=np.float32), iterations=3000)
         faces, centroids = self.region_graph.get_faces_centroids(planes=[2])
         for i, face in enumerate(faces):
             self.region_graph.insert_face(face, r, centroids[i])
@@ -208,7 +206,7 @@ class DominionsLayout:
             self.region_graph.planes[r] = self.region_planes[r]
             self.region_types[r] = 8
             r += 1
-        self.region_graph.spring_adjustment(ratios=np.array((0.01, 0.8, 100), dtype=np.float32), iterations=3000)
+        # self.region_graph.spring_adjustment(ratios=np.array((0.85, 0.01, 50), dtype=np.float32), iterations=3000)
 
     def generate_province_layout(self,
                                  province_list,
@@ -225,10 +223,9 @@ class DominionsLayout:
             # self.province_graphs[plane].weights[i] = province.size
 
         self.province_graphs[plane].make_delaunay_graph()
-        self.province_graphs[plane].lloyd_relaxation(iterations=2)
-        self.province_graphs[plane].spring_adjustment()
+        self.province_graphs[plane].lloyd_relaxation(iterations=4)
+        self.province_graphs[plane].spring_adjustment(ratios=(0.85, 0.01, 50))
         self.province_graphs[plane].clean_delaunay_graph()  # Clean the graph with swaps for non-cap provinces
-        # print(len(self.province_graphs[plane].get_all_connections()))
 
     def generate_connections(self,
                                     plane: int,
@@ -242,38 +239,41 @@ class DominionsLayout:
         self.connections[plane] = list()
         done_edges = set()
         for i, j in self.province_graphs[plane].get_all_connections():
-            if (j, i) not in done_edges:
-                done_edges.add((i, j))
+            if (j, i) in done_edges:
+                continue
 
-                for province in [index_2_prov[i+1], index_2_prov[j+1]]:
-                    choice = int(rd.choices(SPECIAL_NEIGHBOUR, NEIGHBOUR_SPECIAL_WEIGHTS)[0][0])
-                    terrain = province.terrain_int
-                    if province.capital_location:  # Ignore caps
-                        choice = 0
-                        break
-                    elif has_terrain(terrain, 68719476736):  # if cave wall
-                        choice = 4
-                        break
-                    elif self.region_types[province.parent_region.index] == 6:  # if blocker
-                        choice = 36
-                        break
-                    elif has_terrain(terrain, 4):
-                        choice = 0
-                        break
-                    elif has_terrain(terrain, 4096):
-                        choice = 0
-                        break
+            done_edges.add((i, j))
 
-                for dart in self.province_graphs[plane].darts[i, j]:
-                    if dart != 0 and choice != 4:
-                        choice = 0
-                        break
+            choice = int(rd.choices(SPECIAL_NEIGHBOUR, NEIGHBOUR_SPECIAL_WEIGHTS)[0][0])
+            for province in [index_2_prov[i+1], index_2_prov[j+1]]:
+                terrain = province.terrain_int
+                if province.capital_location:  # Ignore caps
+                    choice = 0
+                    break
+                elif has_terrain(terrain, 68719476736):  # if cave wall
+                    choice = 4
+                    break
+                elif self.region_types[province.parent_region.index] == 6:  # if blocker
+                    choice = 36
+                    break
+                elif has_terrain(terrain, 4):
+                    choice = 0
+                elif has_terrain(terrain, 4096):
+                    choice = 0
 
-                for province in [index_2_prov[i+1], index_2_prov[j+1]]:
-                    if (choice == 33 or choice == 36) and not has_terrain(province.terrain_int, 8388608):
-                        province.terrain_int += 8388608
+            for dart in self.province_graphs[plane].darts[i, j]:
+                if dart != 0 and choice != 4:
+                    choice = 0
+                    break
 
-                self.connections[plane].append(Connection(connected_provinces={i+1, j+1}, connection_int=choice))
+            for province in [index_2_prov[i+1], index_2_prov[j+1]]:
+                if (choice == 33 or choice == 36) and not has_terrain(province.terrain_int, 8388608):
+                    province.terrain_int += 8388608
+
+                if (choice == 2 or choice == 16) and not has_terrain(province.terrain_int, 8):
+                    province.terrain_int += 8
+
+            self.connections[plane].append(Connection(connected_provinces={i+1, j+1}, connection_int=choice))
 
         self.min_dist[plane] = self.province_graphs[plane].get_min_dist()
 
@@ -308,27 +308,27 @@ class DominionsLayout:
                         self.gates[2].append([i_provinces[j].index, gate])
                         gate += 1
 
-    def plot(self):
-
-        fix_reg, ax_reg = plt.subplots()
-
-        # Plot regions
-        virtual_graph, virtual_coordinates = self.region_graph.get_virtual_graph()
-
-        for i, (x, y) in enumerate(virtual_coordinates):  # region connections
-            if i in self.region_types:
-                for j in np.argwhere(virtual_graph[i, :] == 1):
-                    j = j[0]
-                    x2, y2 = virtual_coordinates[j]
-                    ax_reg.plot([x, x2], [y, y2], 'k-')
-
-        region_colours = ['g*', 'rD', 'y^', 'bo', 'rv', 'ms', 'kX', 'kX', 'kX']
-        for i, (x, y) in enumerate(virtual_coordinates):  # region connections
-            if i in self.region_types:
-                ax_reg.plot(x, y, region_colours[self.region_types[i]])
-                ax_reg.text(x, y, str(i))
-
-        ax_reg.set(xlim=(0, self.map_size[1][0]), ylim=(0, self.map_size[1][1]))
+    # def plot(self):
+    #
+    #     fix_reg, ax_reg = plt.subplots()
+    #
+    #     # Plot regions
+    #     virtual_graph, virtual_coordinates = self.region_graph.get_virtual_graph()
+    #
+    #     for i, (x, y) in enumerate(virtual_coordinates):  # region connections
+    #         if i in self.region_types:
+    #             for j in np.argwhere(virtual_graph[i, :] == 1):
+    #                 j = j[0]
+    #                 x2, y2 = virtual_coordinates[j]
+    #                 ax_reg.plot([x, x2], [y, y2], 'k-')
+    #
+    #     region_colours = ['g*', 'rD', 'y^', 'bo', 'rv', 'ms', 'kX', 'kX', 'kX']
+    #     for i, (x, y) in enumerate(virtual_coordinates):  # region connections
+    #         if i in self.region_types:
+    #             ax_reg.plot(x, y, region_colours[self.region_types[i]])
+    #             ax_reg.text(x, y, str(i))
+    #
+    #     ax_reg.set(xlim=(0, self.map_size[1][0]), ylim=(0, self.map_size[1][1]))
 
         # # Plot provinces
         # for i, plane in enumerate(self.map.planes):

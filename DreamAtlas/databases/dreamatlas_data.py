@@ -1,8 +1,6 @@
 import numpy as np
 import pathlib
-import os
 import sys
-import matplotlib as mpl
 
 # Terrain preference vector is the weighting for each type of terrain
 TERRAIN_PREF_BITS = [0, 16, 32, 64, 128, 256]
@@ -18,8 +16,8 @@ TERRAIN_PREF_BALANCED, TERRAIN_PREF_PLAINS, TERRAIN_PREF_FOREST, TERRAIN_PREF_MO
 
 # Layout preference vector informs the land-sea split
 LAYOUT_PREFERENCES = [  # LAYOUT_PREF_XXXX = [cap terrain, cap provinces ratio, extra provinces ratio]
-    [1, 1.0, 0.85],         # Land
-    [1, 1.0, 1.0],          # Cave
+    [1, 1.0, 1.0],          # Land
+    [1, 1.0, 0.99],         # Cave
     [1, 0.9, 0.8],          # Coast
     [1, 0.0, 0.9],          # Island
     [0, 0.0, 0.0],          # Deeps
@@ -185,25 +183,84 @@ TERRAIN_POPULATION_ORDER = {0: 4, 16: 2, 32: 1, 64: 0, 128: 3, 256: 5}  # TERRAI
 # Connections config [Standard border, Mountain pass, River border, Impassable, Road, River bridge, Impassable mountain]
 NEIGHBOUR_SPECIAL_WEIGHTS = [0.7, 0.05, 0.05, 0, 0.05, 0.02, 0.05]
 
-COLOURS_PROVINCES = mpl.colormaps['gist_stern']
-COLOURS_REGIONS = mpl.colormaps['tab20']
-COLOURS_TERRAIN = mpl.colormaps['terrain']
-COLOURS_POPULATION = mpl.colormaps['Greens']
-COLOURS_RESOURCES = mpl.colormaps['Oranges']
-COLOURS_DICT = {16: 0.75,
-                32: 0.22,
-                64: 0.55,
-                128: 0.3,
-                256: 0.4,
-                4: 0.1,
-                2052: 0.01,
-                132: 0.25,
-                4096: 0.7,
-                4128: 0.2,
-                4160: 0.55,
-                4224: 0.3,
-                8589934592: 0.85,
-                68719476736: 0.85}  # Terrain colours
+
+def make_province_colourmap():
+
+    colours = [
+        '#e6194b',  # red
+        '#3cb44b',  # green
+        '#4363d8',  # blue
+        '#f58231',  # orange
+        '#911eb4',  # purple
+        '#42d4f4',  # cyan
+        '#f032e6',  # magenta
+        '#bfef45',  # lime
+        '#fabed4',  # pink
+        '#469990',  # teal
+        '#dcbeff',  # lavender
+        '#9a6324',  # brown
+        '#fffac8',  # beige
+        '#800000',  # maroon
+        '#aaffc3',  # mint
+        '#808000',  # olive
+        '#ffd8b1',  # apricot
+        '#000075',  # navy
+        '#a9a9a9',  # grey
+        '#ffffff',  # white
+        '#e6beff',  # lilac
+        '#ff8c94',  # salmon
+        '#86c9b7',  # seafoam
+        '#c8a951',  # gold
+    ]
+
+    # Tile the palette to cover as many provinces as needed (up to ~1500)
+    # Shuffle the tile so repeated colours aren't adjacent
+    def shuffled_tile(palette, n):
+        result = []
+        tile = palette.copy()
+        while len(result) < n:
+            np.random.seed(42)  # fixed seed for reproducibility
+            np.random.shuffle(tile)
+            result.extend(tile)
+        return result[:n]
+
+    return shuffled_tile(colours, 1500)
+
+
+_COLORMAPS_CACHE = None
+
+
+def get_colormaps():
+    global _COLORMAPS_CACHE
+    if _COLORMAPS_CACHE is None:
+        from matplotlib.pyplot import colormaps
+        _COLORMAPS_CACHE = {
+            'provinces':  make_province_colourmap(),
+            'regions':    colormaps['tab20'],
+            'terrain':    colormaps['terrain'],
+            'population': colormaps['Greens'],
+            'resources':  colormaps['Oranges'],
+        }
+    return _COLORMAPS_CACHE
+
+
+# Keep these as they reference the function not matplotlib directly
+COLOURS_DICT = {
+    16:          0.75,
+    32:          0.22,
+    64:          0.55,
+    128:         0.3,
+    256:         0.4,
+    4:           0.1,
+    2052:        0.01,
+    132:         0.25,
+    4096:        0.7,
+    4128:        0.2,
+    4160:        0.55,
+    4224:        0.3,
+    8589934592:  0.85,
+    68719476736: 0.85,
+}
 
 # UNIVERSAL FUNCTIONS AND VARIABLES
 ########################################################################################################################
@@ -220,13 +277,13 @@ else:
     LOAD_DIR = ROOT_DIR
     ART_ICON = ROOT_DIR / r'databases/ui_images/DreamAtlasLogoSquare.png'
 
-AGES = ['Early Age', 'Middle Age', 'Late Age']
+AGES = ['Early Age', 'Middle Age', 'Late Age', 'One Age']
 
 CAPITAL_POPULATION = 40000
 
-AGE_POPULATION_MODIFIERS = [0.8, 1.0, 1.2]
-AGE_POPULATION_SIZES = [8400, 10500, 12600]  # Hundreds adjustment is to account for vanilla smaller/larger aberration
-AVERAGE_POPULATION_SIZES = [5500, 11000, 16500]
+AGE_POPULATION_MODIFIERS = [0.8, 1.0, 1.2, 1.0]
+AGE_POPULATION_SIZES = [8400, 10500, 12600, 10500]  # Hundreds adjustment is to account for vanilla smaller/larger aberration
+AVERAGE_POPULATION_SIZES = [5500, 11000, 16500, 11000]
 RESOURCE_SPECIFIC_TERRAINS = {4224: 1, 4112: 1.6, 4128: 2, 4096: 1, 132: 1, 20: 1.4, 2052: 1.2, 4: 1, 8388608: 2, 128: 1.6, 16: 1.4}
 
 NEIGHBOURS_NO_WRAP = np.array([[0, 0]])
@@ -263,3 +320,4 @@ with open(ROOT_DIR / 'databases/peripheries', 'r') as f:
         data = line.strip('\n')
         data = data.split('\t')
         PERIPHERY_DATA.append(list(map(int, data)))
+

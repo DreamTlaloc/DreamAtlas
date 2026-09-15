@@ -1,10 +1,15 @@
 # Imports all the DreamAtlas functionality and dependencies
-import matplotlib.pyplot as plt
 import struct
+import os
 
-from DreamAtlas.databases import *
-from DreamAtlas.functions import terrain_int2list
+from PIL.Image import Image
+
+from ..databases.dreamatlas_data import *
+from ..functions.minor_functions import has_terrain
+
 from .class_layout import DominionsLayout
+from .class_province import Province
+from .graph import DreamAtlasGraph
 
 
 class DominionsMap:
@@ -223,6 +228,7 @@ class DominionsMap:
             for (i, j, c) in self.special_neighbour_list[plane]:
                 self.layout.special_neighbours[plane].append([i, j, c])
 
+            from ..functions.numba_pixel_mapping import fast_pb_2_matrix  # Late import for the spec
             if self.pixel_map[plane] is None:
                 self.pixel_map[plane] = fast_pb_2_matrix(self.pixel_owner_list[plane], width=self.map_size[plane][0], height=self.map_size[plane][1])
 
@@ -436,7 +442,7 @@ class DominionsMap:
         if name is None:
             name = self.map_title
         if location is None:
-            location = ROOT_DIR.parent / 'maps' / name # ROOT_DIR points to the module itself not the repo
+            location = ROOT_DIR.parent / 'maps' / name  # ROOT_DIR points to the module itself not the repo
 
         os.makedirs(location, exist_ok=True)
 
@@ -453,67 +459,67 @@ class DominionsMap:
             else:
                 return Exception("No valid artstyle")
 
-    def plot(self):  # Making the figures (general map, regions, terrain, population)
-
-        fig1, axs1 = plt.subplots(len(self.planes), 1)
-        fig2, axs2 = plt.subplots(len(self.planes), 1)
-        fig3, axs3 = plt.subplots(len(self.planes), 1)
-        fig4, axs4 = plt.subplots(len(self.planes), 1)
-
-        for i, plane in enumerate(self.planes):
-            map_x, map_y = self.map_size[plane]
-            if len(self.planes) == 1:
-                plane_axs = [axs1, axs2, axs3, axs4]
-            else:
-                plane_axs = [axs1[i], axs2[i], axs3[i], axs4[i]]
-
-            for ax in plane_axs:
-                ax.set(xlim=[0, map_x], ylim=[0, map_y])
-
-            index_dict, region_dict, terrain_dict, population_dict = {0: 0}, {0: -1}, {0: -1}, {0: -1}
-            for province in self.province_list[plane]:
-                index_dict[province.index] = province.index
-                region_dict[province.index] = province.parent_region.index
-                terrain_dict[province.index] = 0
-                for terrain in terrain_int2list(province.terrain_int):
-                    if terrain in TERRAIN_2_HEIGHTS_DICT:
-                        terrain_dict[province.index] += TERRAIN_2_HEIGHTS_DICT[terrain]
-                population_dict[province.index] = province.population
-
-            plotting_pixel_map = np.transpose(self.pixel_map[plane])
-            plane_general = np.vectorize(lambda i: index_dict[i])(plotting_pixel_map)
-            plane_regions = np.vectorize(lambda i: region_dict[i])(plotting_pixel_map)
-            plane_terrain = np.vectorize(lambda i: terrain_dict[i])(plotting_pixel_map)
-            plane_population = np.vectorize(lambda i: population_dict[i])(plotting_pixel_map)
-
-            # Plotting the contourf and the province border contour map
-            plane_axs[0].imshow(plane_general, cmap=cm.Pastel1)
-            plane_axs[0].contour(plane_general, levels=max(self.layout.graph[plane]), colors=['white', ])
-            plane_axs[1].imshow(plane_regions, vmin=1, vmax=len(self.layout.region_graph), cmap=cm.tab20)
-            plane_axs[1].contour(plane_general, levels=max(self.layout.graph[plane]), colors=['white', ])
-            plane_axs[2].imshow(plane_terrain, vmin=-200, vmax=600, cmap=cm.terrain)
-            plane_axs[2].contour(plane_general, levels=max(self.layout.graph[plane]), colors=['white', ])
-            plane_axs[3].imshow(plane_population, cmap=cm.YlGn)
-            plane_axs[3].contour(plane_general, levels=max(self.layout.graph[plane]), colors=['white', ])
-
-            virtual_graph, virtual_coordinates = make_virtual_graph(self.layout.graph[plane], self.layout.coordinates[plane], self.layout.darts[plane], self.map_size[plane])
-            for i in virtual_graph:
-                x0, y0 = virtual_coordinates[i]
-                for j in virtual_graph[i]:
-                    x1, y1 = virtual_coordinates[j]
-                    for ax in plane_axs:
-                        ax.plot([x0, x1], [y0, y1], 'k-')
-
-            for province in self.province_list[plane]:
-                x0, y0 = province.coordinates
-                colour = 'ro'
-                if has_terrain(province.terrain_int, 67108864):
-                    colour = 'bo'
-                elif has_terrain(province.terrain_int, 33554432):
-                    colour = 'yo'
-                for ax in plane_axs:
-                    ax.plot(x0, y0, colour)
-                    ax.text(x0, y0, str(province.index))
+    # def plot(self):  # Making the figures (general map, regions, terrain, population)
+    #
+    #     fig1, axs1 = plt.subplots(len(self.planes), 1)
+    #     fig2, axs2 = plt.subplots(len(self.planes), 1)
+    #     fig3, axs3 = plt.subplots(len(self.planes), 1)
+    #     fig4, axs4 = plt.subplots(len(self.planes), 1)
+    #
+    #     for i, plane in enumerate(self.planes):
+    #         map_x, map_y = self.map_size[plane]
+    #         if len(self.planes) == 1:
+    #             plane_axs = [axs1, axs2, axs3, axs4]
+    #         else:
+    #             plane_axs = [axs1[i], axs2[i], axs3[i], axs4[i]]
+    #
+    #         for ax in plane_axs:
+    #             ax.set(xlim=[0, map_x], ylim=[0, map_y])
+    #
+    #         index_dict, region_dict, terrain_dict, population_dict = {0: 0}, {0: -1}, {0: -1}, {0: -1}
+    #         for province in self.province_list[plane]:
+    #             index_dict[province.index] = province.index
+    #             region_dict[province.index] = province.parent_region.index
+    #             terrain_dict[province.index] = 0
+    #             for terrain in terrain_int2list(province.terrain_int):
+    #                 if terrain in TERRAIN_2_HEIGHTS_DICT:
+    #                     terrain_dict[province.index] += TERRAIN_2_HEIGHTS_DICT[terrain]
+    #             population_dict[province.index] = province.population
+    #
+    #         plotting_pixel_map = np.transpose(self.pixel_map[plane])
+    #         plane_general = np.vectorize(lambda i: index_dict[i])(plotting_pixel_map)
+    #         plane_regions = np.vectorize(lambda i: region_dict[i])(plotting_pixel_map)
+    #         plane_terrain = np.vectorize(lambda i: terrain_dict[i])(plotting_pixel_map)
+    #         plane_population = np.vectorize(lambda i: population_dict[i])(plotting_pixel_map)
+    #
+    #         # Plotting the contourf and the province border contour map
+    #         plane_axs[0].imshow(plane_general, cmap=cm.Pastel1)
+    #         plane_axs[0].contour(plane_general, levels=max(self.layout.graph[plane]), colors=['white', ])
+    #         plane_axs[1].imshow(plane_regions, vmin=1, vmax=len(self.layout.region_graph), cmap=cm.tab20)
+    #         plane_axs[1].contour(plane_general, levels=max(self.layout.graph[plane]), colors=['white', ])
+    #         plane_axs[2].imshow(plane_terrain, vmin=-200, vmax=600, cmap=cm.terrain)
+    #         plane_axs[2].contour(plane_general, levels=max(self.layout.graph[plane]), colors=['white', ])
+    #         plane_axs[3].imshow(plane_population, cmap=cm.YlGn)
+    #         plane_axs[3].contour(plane_general, levels=max(self.layout.graph[plane]), colors=['white', ])
+    #
+    #         virtual_graph, virtual_coordinates = make_virtual_graph(self.layout.graph[plane], self.layout.coordinates[plane], self.layout.darts[plane], self.map_size[plane])
+    #         for i in virtual_graph:
+    #             x0, y0 = virtual_coordinates[i]
+    #             for j in virtual_graph[i]:
+    #                 x1, y1 = virtual_coordinates[j]
+    #                 for ax in plane_axs:
+    #                     ax.plot([x0, x1], [y0, y1], 'k-')
+    #
+    #         for province in self.province_list[plane]:
+    #             x0, y0 = province.coordinates
+    #             colour = 'ro'
+    #             if has_terrain(province.terrain_int, 67108864):
+    #                 colour = 'bo'
+    #             elif has_terrain(province.terrain_int, 33554432):
+    #                 colour = 'yo'
+    #             for ax in plane_axs:
+    #                 ax.plot(x0, y0, colour)
+    #                 ax.text(x0, y0, str(province.index))
 
     def __str__(self):  # Printing the class returns this
 

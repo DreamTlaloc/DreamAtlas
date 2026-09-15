@@ -28,6 +28,7 @@ class DreamAtlasSettings:
         self.generic_nations: list = list()
         self.age: int = 0
         self.disciples: int = 0
+        self.one_pond: int = 0
         self.omniscience: int = 0
 
     def load_file(self, filename):

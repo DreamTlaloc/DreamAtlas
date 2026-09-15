@@ -1,4 +1,4 @@
-from DreamAtlas.GUI import run_interface
+from DreamAtlas.DreamAtlas.GUI.qt_interface import run_qt_interface
 
 if __name__ == "__main__":
-    run_interface()
+    run_qt_interface()

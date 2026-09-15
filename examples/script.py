@@ -1,5 +1,5 @@
-from DreamAtlas import *
 from pathlib import Path
+from DreamAtlas import *
 
 PATH = Path('.').absolute()
 name = 'test_map'

@@ -1,24 +1,20 @@
 from .qt_loading import QtGeneratorLoadingWidget
-from ..databases import (AGES, LOAD_DIR, AGE_NATIONS, VICTORY_CONDITIONS, POPTYPES, FORT, SPECIAL_NEIGHBOUR,
-                         REGION_WATER_INFO, REGION_CAVE_INFO, AGE_POPULATION_MODIFIERS, NOT_AVAILABLE_GRAPHS, DATASET_GRAPHS)
-from ..functions import has_terrain
+from ..databases.dominions_data import AGE_NATIONS, VICTORY_CONDITIONS, POPTYPES, FORT, SPECIAL_NEIGHBOUR
+from ..databases.dreamatlas_data import AGES, LOAD_DIR, REGION_WATER_INFO, REGION_CAVE_INFO, AGE_POPULATION_MODIFIERS, NOT_AVAILABLE_GRAPHS, DATASET_GRAPHS
+from ..functions.minor_functions import has_terrain
 
 from PyQt5.QtWidgets import (
     QDialog, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QGroupBox, QScrollArea, QLabel, QLineEdit, QComboBox, QPushButton, QSlider, QSizePolicy, QFileDialog, QGraphicsView, QGraphicsScene
+    QGroupBox, QScrollArea, QLabel, QLineEdit, QComboBox, QPushButton, QSlider, QSizePolicy, QFileDialog, QGraphicsView,
+    QGraphicsScene, QGraphicsLineItem, QGraphicsEllipseItem
 )
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
-from PyQt5.QtGui import QIntValidator
+from PyQt5.QtGui import QIntValidator, QPainter, QPen, QColor, QBrush
 
-from .ui_data import *
+from .qt_ui_data import *
 
 
 class MapCanvas(QGraphicsView):
-    """
-    Scrollable, pannable graphics view used as the main map viewport.
-    Replaces the tkinter Canvas. Items are stored in a QGraphicsScene;
-    visibility is managed via item.setVisible().
-    """
 
     province_right_clicked = pyqtSignal(object)
 
@@ -31,16 +27,16 @@ class MapCanvas(QGraphicsView):
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
-        self.setRenderHint(self.renderHints())
+        self.setRenderHint(QPainter.Antialiasing)
+        self.setRenderHint(QPainter.SmoothPixmapTransform)
 
-        # Internal lookup structures populated by update_viewing_panel()
-        self._bitmaps = {}  # plane → list of (index, QGraphicsPixmapItem, QPixmap)
-        self._bitmap_colors = {}  # plane → list of colour strings per lense
-        self._photoimages = {}  # plane → (path, QGraphicsPixmapItem, normal_px, trans_px) | None
-        self._connections = {}  # plane → list of (connection_obj, QGraphicsLineItem)
-        self._nodes = {}  # plane → list of (province_index, QGraphicsEllipseItem)
-        self._borders = {}  # plane → (QGraphicsPixmapItem, QPixmap)
-        self._icons = {}  # plane → list of QGraphicsPixmapItem
+        self._bitmaps = {}
+        self._bitmap_colors = {}
+        self._photoimages = {}
+        self._connections = {}
+        self._nodes = {}
+        self._borders = {}
+        self._icons = {}
 
     def wheelEvent(self, event):
         factor = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15
@@ -52,7 +48,7 @@ class MapCanvas(QGraphicsView):
             items = self._scene.items(scene_pos)
             if items:
                 item = items[0]
-                data = item.data(0)  # we store Province/Connection in data slot 0
+                data = item.data(0)
                 if data is not None:
                     self.province_right_clicked.emit(data)
         else:
@@ -100,7 +96,7 @@ class QtInputToplevel(QDialog):
                 pass
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(5, 5, 5, 5)
 
         self.widget = QtInputWidget(
             master=self,
@@ -158,7 +154,17 @@ class QtInputWidget(QWidget):
         self._make_size()
 
     def _make_size(self):
-        width = self._scroll_area.viewport().width() if hasattr(self, '_scroll_area') else self.width()
+        parent = self.parent()
+        while parent is not None and not isinstance(parent, QDialog):
+            parent = parent.parent()
+
+        if parent is not None:
+            width = parent.width() - 40  # subtract margins
+        elif hasattr(self, '_scroll_area'):
+            width = self._scroll_area.viewport().width()
+        else:
+            width = self.width()
+
         new_small_cols = max(1, width // INPUT_ENTRY_SIZE)
         new_nation_cols = max(1, int(width / 120))
 
@@ -169,7 +175,7 @@ class QtInputWidget(QWidget):
             for idx in range(layout.count()):
                 child = layout.itemAt(idx).widget()
                 if isinstance(child, CustomGenericNationWidget):
-                    child.update(cols=new_small_cols)
+                    child.refresh(cols=new_small_cols)
                     break
 
         if self.cols != new_small_cols:
@@ -194,11 +200,13 @@ class QtInputWidget(QWidget):
                     continue
                 for idx in range(layout.count()):
                     w = layout.itemAt(idx).widget()
-                    if isinstance(w, (VanillaNationWidget, CustomGenericNationWidget)):
+                    if isinstance(w, (VanillaNationWidget)):
                         disciples = self.variables.get('disciples', 0)
-                        w.update(disciples, cols=new_nation_cols)
+                        w.refresh(disciples, cols=new_nation_cols)
+                    if isinstance(w, CustomGenericNationWidget):
+                        w.refresh(cols=new_small_cols)
                     elif isinstance(w, TerrainWidget):
-                        w.update(cols=new_nation_cols)
+                        w.refresh(cols=new_nation_cols)
 
     def _make_gui(self):
         root_layout = QVBoxLayout(self)
@@ -257,7 +265,7 @@ class QtInputWidget(QWidget):
                 else:
                     miniframe = QWidget(group)
                     mini_layout = QGridLayout(miniframe)
-                    mini_layout.setContentsMargins(0, 0, 0, 0)
+                    mini_layout.setContentsMargins(1, 1, 16, 1)
                     mini_layout.setSpacing(2)
                     mini_layout.setColumnMinimumWidth(0, 100)
                     mini_layout.setColumnMinimumWidth(1, 100)
@@ -265,7 +273,7 @@ class QtInputWidget(QWidget):
                     mini_layout.setColumnStretch(1, 1)
 
                     lbl = QLabel(label)
-                    lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
                     lbl.setToolTip(tooltip)
                     mini_layout.addWidget(lbl, 0, 0)
                     self.labels[attribute] = lbl
@@ -299,7 +307,7 @@ class QtInputWidget(QWidget):
                         inp.setEnabled(active)
                         inp.setToolTip(tooltip)
                         if attribute == 'disciples':
-                            inp.toggled.connect(lambda checked: self._set_variable(attribute, int(checked)))
+                            inp.toggled.connect(lambda checked, a=attribute: self._set_variable(a, int(checked)))
                             inp.toggled.connect(self.update_disciples)
                         else:
                             inp.toggled.connect(lambda checked, a=attribute: self._set_variable(a, int(checked)))
@@ -308,6 +316,8 @@ class QtInputWidget(QWidget):
                         mini_layout.addWidget(inp, 0, 1)
 
                     group_layout.addWidget(miniframe, i // max(self.cols, 1), i % max(self.cols, 1))
+
+        self._scroll_layout.addStretch(1)  # pushes everything to the top
 
         # Button bar
         if len(self.ui_config['buttons']) > 0:
@@ -333,23 +343,25 @@ class QtInputWidget(QWidget):
             parent.close()
 
     def update_disciples(self):
-        disciples = self.variables.get('disciples', 0)
+        btn = self.inputs.get('disciples')
+        disciples = int(btn.isChecked()) if btn is not None else 0
         if 'vanilla_nations' in self.inputs:
-            self.inputs['vanilla_nations'].update(disciples=disciples)
+            self.inputs['vanilla_nations'].refresh(disciples=disciples)
         if 'custom_nations' in self.inputs:
-            self.inputs['custom_nations'].update(disciples=disciples)
+            self.inputs['custom_nations'].refresh(disciples=disciples)
 
     def input_2_class(self):
         for attribute, (attribute_type, widget, _, options, active, __) in self.ui_config['attributes'].items():
             if not active:
                 continue
-            if widget == 0:
+
+            if widget == 0 and self.inputs[attribute].text() is not None:
                 setattr(self.target_class, attribute, attribute_type(self.inputs[attribute].text()))
-            elif widget == 1:
+            elif widget == 1 and self.inputs[attribute].currentIndex() is not None:
                 setattr(self.target_class, attribute, attribute_type(self.inputs[attribute].currentIndex()))
-            elif widget == 2:
+            elif widget == 2 and self.inputs[attribute].get() is not None:
                 setattr(self.target_class, attribute, attribute_type(self.inputs[attribute].get()))
-            elif widget == 3:
+            elif widget == 3 and self.variables.get(attribute, 0) is not None:
                 setattr(self.target_class, attribute, attribute_type(self.variables.get(attribute, 0)))
             elif widget == 4:
                 self.target_class.age = AGES.index(self.inputs['vanilla_nations'].age.currentText())
@@ -357,9 +369,9 @@ class QtInputWidget(QWidget):
             elif widget == 5:
                 self.target_class.custom_nations = self.inputs['custom_nations'].custom_nation_list
                 self.target_class.generic_nations = self.inputs['custom_nations'].generic_nation_list
-            elif widget == 6:
+            elif widget == 6 and self.inputs[attribute].get() is not None:
                 setattr(self.target_class, attribute, attribute_type(self.inputs[attribute].get()))
-            elif widget == 7:
+            elif widget == 7 and self.inputs['terrain_int'].terrain_int is not None:
                 self.target_class.terrain_int = int(self.inputs['terrain_int'].terrain_int)
 
     def class_2_input(self):
@@ -386,16 +398,16 @@ class QtInputWidget(QWidget):
                 age_name = AGES[getattr(self.target_class, 'age')]
                 self.inputs['vanilla_nations'].age.setCurrentText(age_name)
                 self.inputs['vanilla_nations'].vanilla_nation_list = value
-                self.inputs['vanilla_nations'].update(disciples=getattr(self.target_class, 'disciples', 0))
+                self.inputs['vanilla_nations'].refresh(disciples=getattr(self.target_class, 'disciples', 0))
             elif widget == 5:
                 self.inputs['custom_nations'].custom_nation_list = getattr(self.target_class, 'custom_nations', [])
                 self.inputs['custom_nations'].generic_nation_list = getattr(self.target_class, 'generic_nations', [])
-                self.inputs['custom_nations'].update(disciples=getattr(self.target_class, 'disciples', 0))
+                self.inputs['custom_nations'].refresh(disciples=getattr(self.target_class, 'disciples', 0))
             elif widget == 6:
                 self.inputs[attribute].set(self.inputs[attribute].set_dict.get(value, '-'))
             elif widget == 7:
                 self.inputs[attribute].terrain_int = getattr(self.target_class, 'terrain_int', 0)
-                self.inputs[attribute].update(cols=self.cols * 2,
+                self.inputs[attribute].refresh(cols=self.cols * 2,
                                               set_terrain=getattr(self.target_class, 'terrain_int', 0))
 
     def input_2_list(self):
@@ -421,8 +433,8 @@ class QtInputWidget(QWidget):
     def add(self):
         self.target_location.append(self.input_2_list())
         if self.parent_widget:
-            self.parent_widget.update()
-        parent = self.parent()
+            self.parent_widget.refresh()
+            parent = self.parent()
         if parent:
             parent.close()
 
@@ -482,18 +494,18 @@ class VanillaNationWidget(QWidget):
         self.age = QComboBox()
         self.age.addItems(AGES)
         self.age.setCurrentText(AGES[0])
-        self.age.currentIndexChanged.connect(lambda: self.update())
+        self.age.currentIndexChanged.connect(lambda: self.refresh())
         main_layout.addWidget(self.age)
 
         self._grid_widget = QWidget()
         self._grid_layout = QGridLayout(self._grid_widget)
         self._grid_layout.setSpacing(2)
-        self._grid_layout.setContentsMargins(0, 0, 0, 0)
+        self._grid_layout.setContentsMargins(0, 2, 0, 0)
         main_layout.addWidget(self._grid_widget)
 
-        self.update()
+        self.refresh()
 
-    def update(self, disciples=None, cols=None):
+    def refresh(self, disciples=None, cols=None):
         if disciples is not None:
             self.disciples = disciples
         if cols is not None:
@@ -530,7 +542,7 @@ class VanillaNationWidget(QWidget):
             if self.disciples:
                 team_cb = QComboBox()
                 team_cb.addItems([str(t) for t in TEAMS])
-                team_cb.setMaximumWidth(40)
+                team_cb.setMinimumWidth(40)
                 self.teams[nation_id] = team_cb
                 mf_layout.addWidget(team_cb, stretch=1)
 
@@ -552,7 +564,10 @@ class VanillaNationWidget(QWidget):
             if self.variables.get(nation_id, False):
                 team = 0
                 if self.disciples and nation_id in self.teams:
-                    team = int(self.teams[nation_id].currentText())
+                    try:
+                        team = int(self.teams[nation_id].currentText())
+                    except (ValueError, TypeError):
+                        team = 0  # default to team 0 if placeholder or invalid
                 nation_list.append([nation_id, team])
         return nation_list
 
@@ -579,7 +594,7 @@ class CustomGenericNationWidget(QWidget):
         add_custom.clicked.connect(lambda: QtInputToplevel(
             self, 'Add Custom Nation', UI_CONFIG_CUSTOMNATION, 1,
             target_location=self.custom_nation_list,
-            parent_widget=self, geometry="500x550"
+            parent_widget=self, geometry="400x550"
         ))
         add_generic = QPushButton('Add Generic Start')
         add_generic.clicked.connect(lambda: QtInputToplevel(
@@ -597,20 +612,22 @@ class CustomGenericNationWidget(QWidget):
         self._grid_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.addWidget(self._grid_widget)
 
-        self.update()
+        self.refresh()
 
-    def update(self, disciples=None, cols=None):
+    def refresh(self, disciples=None, cols=None):
         if disciples is not None:
             self.disciples = disciples
         if cols is not None:
             self.cols = cols
 
         for frame in self.miniframes:
-            frame.deleteLater()
+            self._grid_layout.removeWidget(frame)  # detach from layout
+            frame.setParent(None)  # immediately removes from widget tree and destroys
+            frame.hide()  # belt-and-braces hide in case of any delay
         self.miniframes.clear()
         self.nation_inputs.clear()
 
-        styles = ['color: #28a745', 'color: #6c757d']  # success / secondary colours
+        styles = ['color: #28a745', 'color: #6c757d']
 
         for i, nation_list in enumerate([self.custom_nation_list, self.generic_nation_list]):
             for j, nation in enumerate(nation_list):
@@ -639,14 +656,17 @@ class CustomGenericNationWidget(QWidget):
                 remove_btn = QPushButton('X')
                 remove_btn.setMaximumWidth(28)
                 remove_btn.setStyleSheet(styles[i])
-                target_list = self.custom_nation_list if i == 0 else self.generic_nation_list
-                remove_btn.clicked.connect(lambda _, lst=target_list, idx=j: self.remove(lst, idx))
+                # Use i and j directly — don't capture the list reference
+                remove_btn.clicked.connect(lambda _, which=i, idx=j: self.remove(which, idx))
                 mf_layout.addWidget(remove_btn, stretch=1)
 
-    def remove(self, nation_list, j):
-        if 0 <= j < len(nation_list):
-            nation_list.pop(j)
-        self.update()
+                mf.show()
+
+    def remove(self, which, j):
+        target_list = self.custom_nation_list if which == 0 else self.generic_nation_list
+        if 0 <= j < len(target_list):
+            target_list.pop(j)
+        self.refresh()
 
 
 class EntryScaleWidget(QWidget):
@@ -736,7 +756,7 @@ class TerrainWidget(QWidget):
             btn.toggled.connect(lambda checked, idx=i: self._on_toggle(idx, checked))
             self.options[i] = btn
 
-        self.update()
+        self.refresh()
 
     def _on_toggle(self, idx, checked):
         self.variables[idx] = checked
@@ -750,7 +770,7 @@ class TerrainWidget(QWidget):
         self.terrain_int = total
         self.terrain_display.setText(str(total))
 
-    def update(self, cols=None, set_terrain=None):
+    def refresh(self, cols=None, set_terrain=None):
         if cols is not None:
             self.cols = cols
 
@@ -792,7 +812,7 @@ class IllwinterDropdownWidget(QWidget):
             self.set_dict[i] = j
 
         layout = QGridLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(1, 1, 16, 1)
         layout.setSpacing(2)
         layout.setColumnMinimumWidth(0, 100)
         layout.setColumnMinimumWidth(1, 100)
@@ -800,7 +820,7 @@ class IllwinterDropdownWidget(QWidget):
         layout.setColumnStretch(1, 1)
 
         lbl = QLabel(text)
-        lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         layout.addWidget(lbl, 0, 0)
 
         self.input = QComboBox()
@@ -870,14 +890,8 @@ class GeneratorInfoWidget(QWidget):
         self._timer.start()
 
     def _check_values(self):
-        try:
-            input_widget = self.parent().parent().parent()
-            if not isinstance(input_widget, QtInputWidget):
-                return
-            settings_dict = input_widget.inputs
-        except AttributeError:
-            return
-
+        input_widget = self.parent().parent().parent().parent().parent()
+        settings_dict = input_widget.inputs
         num_players = (
                 len(settings_dict['vanilla_nations'].get()) +
                 len(settings_dict['custom_nations'].custom_nation_list) +
@@ -888,21 +902,21 @@ class GeneratorInfoWidget(QWidget):
 
         water_provs = (
                 settings_dict['water_region_num'].get() *
-                REGION_WATER_INFO[WATER_REGIONS.index(settings_dict['water_region_type'].input.currentText())][2] +
+                REGION_WATER_INFO[WATER_REGIONS.index(settings_dict['water_region_type'].currentText())][2] +
                 0.05 * num_players *
                 settings_dict['periphery_size'].get() *
                 settings_dict['player_neighbours'].get()
         )
         cave_provs = (
                 settings_dict['cave_region_num'].get() *
-                REGION_CAVE_INFO[CAVE_REGIONS.index(settings_dict['cave_region_type'].input.currentText())][2]
+                REGION_CAVE_INFO[CAVE_REGIONS.index(settings_dict['cave_region_type'].currentText())][2]
         )
         num_provs = (
                 num_players * settings_dict['homeland_size'].get() +
                 0.5 * num_players * settings_dict['periphery_size'].get() * settings_dict['player_neighbours'].get() +
                 settings_dict['throne_region_num'].get() +
                 settings_dict['water_region_num'].get() *
-                REGION_WATER_INFO[WATER_REGIONS.index(settings_dict['water_region_type'].input.currentText())][2] +
+                REGION_WATER_INFO[WATER_REGIONS.index(settings_dict['water_region_type'].currentText())][2] +
                 cave_provs
         )
         provs_per_player = num_provs / num_players
@@ -926,7 +940,112 @@ class GeneratorInfoWidget(QWidget):
                 error = True
             return message if error else "You're good"
 
-        values = [num_provs, water_provs, cave_provs, provs_per_player, gold_per_player, error_check()]
-        for i, val in enumerate(values):
+        values = {
+            0: num_provs,
+            1: water_provs,
+            2: cave_provs,
+            3: provs_per_player,
+            4: gold_per_player,
+            5: error_check(),
+        }
+        for i, val in values.items():
             if i in self.metrics:
                 self.metrics[i].setText(str(round(val, 2)) if isinstance(val, float) else str(val))
+
+
+class HoverEllipseItem(QGraphicsEllipseItem):
+    def __init__(self, x, y, w, h, normal_pen, normal_brush, hover_pen, hover_brush):
+        super().__init__(x, y, w, h)
+        self._normal_pen    = normal_pen
+        self._normal_brush  = normal_brush
+        self._hover_pen     = hover_pen
+        self._hover_brush   = hover_brush
+        self._flash_pen     = QPen(QColor('#F400C7'), 5)   # yellow flash
+        self._flash_brush   = QBrush(QColor('#F400C7'))
+        self._flash_state   = False
+        self._selected      = False
+
+        self._timer = QTimer()
+        self._timer.setInterval(400)  # flash every 400ms
+        self._timer.timeout.connect(self._on_flash)
+
+        self.setPen(normal_pen)
+        self.setBrush(normal_brush)
+        self.setAcceptHoverEvents(True)
+
+    def set_selected(self, selected: bool):
+        self._selected = selected
+        if selected:
+            self._flash_state = False
+            self._timer.start()
+        else:
+            self._timer.stop()
+            self._flash_state = False
+            self.setPen(self._normal_pen)
+            self.setBrush(self._normal_brush)
+
+    def _on_flash(self):
+        self._flash_state = not self._flash_state
+        if self._flash_state:
+            self.setPen(self._flash_pen)
+            self.setBrush(self._flash_brush)
+        else:
+            self.setPen(self._normal_pen)
+            self.setBrush(self._normal_brush)
+
+    def hoverEnterEvent(self, event):
+        if not self._selected:
+            self.setPen(self._hover_pen)
+            self.setBrush(self._hover_brush)
+        self.setCursor(Qt.PointingHandCursor)
+        super().hoverEnterEvent(event)
+
+    def hoverLeaveEvent(self, event):
+        if not self._selected:
+            self.setPen(self._normal_pen)
+            self.setBrush(self._normal_brush)
+        self.setCursor(Qt.ArrowCursor)
+        super().hoverLeaveEvent(event)
+
+
+class HoverLineItem(QGraphicsLineItem):
+    def __init__(self, x1, y1, x2, y2, normal_pen, hover_pen):
+        super().__init__(x1, y1, x2, y2)
+        self._normal_pen  = normal_pen
+        self._hover_pen   = hover_pen
+        self._flash_pen   = QPen(QColor('#F400C7'), 9, Qt.DashLine)  # yellow flash
+        self._flash_state = False
+        self._selected    = False
+
+        self._timer = QTimer()
+        self._timer.setInterval(400)
+        self._timer.timeout.connect(self._on_flash)
+
+        self.setPen(normal_pen)
+        self.setAcceptHoverEvents(True)
+
+    def set_selected(self, selected: bool):
+        self._selected = selected
+        if selected:
+            self._flash_state = False
+            self._timer.start()
+        else:
+            self._timer.stop()
+            self._flash_state = False
+            self.setPen(self._normal_pen)
+
+    def _on_flash(self):
+        self._flash_state = not self._flash_state
+        self.setPen(self._flash_pen if self._flash_state else self._normal_pen)
+
+    def hoverEnterEvent(self, event):
+        if not self._selected:
+            self.setPen(self._hover_pen)
+        self.setCursor(Qt.PointingHandCursor)
+        super().hoverEnterEvent(event)
+
+    def hoverLeaveEvent(self, event):
+        if not self._selected:
+            self.setPen(self._normal_pen)
+        self.setCursor(Qt.ArrowCursor)
+        super().hoverLeaveEvent(event)

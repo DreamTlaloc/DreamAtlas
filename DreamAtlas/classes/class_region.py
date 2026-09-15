@@ -1,14 +1,12 @@
-import random as rd
-import numpy as np
-import matplotlib.cm as cm
-import matplotlib.pyplot as plt
+# import matplotlib.cm as cm
 
 from .class_province import Province
 from .class_settings import DreamAtlasSettings
-from .class_nation import Nation, CustomNation, GenericNation
+from .class_nation import Nation, GenericNation
 
-from DreamAtlas.databases import *
-from DreamAtlas.functions import *
+from ..functions.minor_functions import *
+from ..functions.numba_pixel_mapping import find_pixel_ownership
+
 
 class Region:
 
@@ -79,11 +77,6 @@ class Region:
                 if self.layout[0] == 0:
                     terrain_set.add(4)
 
-            # elif i <= self.anchor_connections:  # Circle provinces
-            #     terrain_set.add(terrain_picks[i])
-            #     if i > self.layout[1] * self.anchor_connections:  # Circle sea/land split
-            #         terrain_set.add(4)  # Sea
-
             else:  # Extra provinces
                 terrain_set.add(terrain_picks[i])
                 if rd.random() > self.layout[2]:  # land/sea
@@ -128,45 +121,45 @@ class Region:
             province.coordinates = np.mod(plane_scale * (global_coordinates + scale[self.plane] * province.coordinates), map_size[self.plane], dtype=np.float32, casting='unsafe')
             province.size, province.shape = find_shape_size(province, self.settings)
 
-    def plot(self):
-
-        # Making the figures (graph, terrain, population)
-        fig, axs = plt.subplots(1, 3)
-        ax_graph, ax_terrain, ax_population = axs
-        plot_size = (500, 500)
-        z_graph = np.zeros(plot_size)
-        z_terrain = np.zeros(plot_size)
-        z_population = np.zeros(plot_size)
-
-        # Make the contourf z objects to be plotted
-        points = list()
-        for province in self.provinces:
-            index = province.index
-            x, y = province.coordinates
-            points.append([index, x, y])
-
-        pixel_map = find_pixel_ownership(points, plot_size, hwrap=False, vwrap=False, scale_down=8, minkowski_dist=3)
-        for x in range(plot_size[0]):
-            for y in range(plot_size[1]):
-                this_index = pixel_map[x][y]
-                z_graph[y][x] = this_index
-                terrain_list = terrain_int2list(self.provinces[this_index - 1].terrain_int)
-                for terrain in terrain_list:
-                    z_terrain[y][x] += TERRAIN_2_HEIGHTS_DICT[terrain]
-                z_population[y][x] = self.provinces[this_index - 1].population
-
-        # Plotting the contourf and the province border contour map
-        levels = len(self.graph)
-        ax_graph.imshow(z_graph, cmap=cm.Set1)
-        ax_graph.contour(z_graph, levels=levels, colors=['white', ])
-        ax_graph.set_title('Provinces')
-        ax_terrain.imshow(z_terrain, vmin=-200, vmax=600, cmap=cm.terrain)
-        ax_terrain.contour(z_graph, levels=levels, colors=['white', ])
-        ax_terrain.set_title('Terrain')
-        ax_population.imshow(z_population, vmin=0, vmax=45000, cmap=cm.YlGn)
-        ax_population.contour(z_graph, levels=levels, colors=['white', ])
-        ax_population.set_title('Population')
-        fig.suptitle('%s Region' % self.name)
+    # def plot(self):
+    #
+    #     # Making the figures (graph, terrain, population)
+    #     fig, axs = plt.subplots(1, 3)
+    #     ax_graph, ax_terrain, ax_population = axs
+    #     plot_size = (500, 500)
+    #     z_graph = np.zeros(plot_size)
+    #     z_terrain = np.zeros(plot_size)
+    #     z_population = np.zeros(plot_size)
+    #
+    #     # Make the contourf z objects to be plotted
+    #     points = list()
+    #     for province in self.provinces:
+    #         index = province.index
+    #         x, y = province.coordinates
+    #         points.append([index, x, y])
+    #
+    #     pixel_map = find_pixel_ownership(points, plot_size, hwrap=False, vwrap=False, scale_down=8, minkowski_dist=3)
+    #     for x in range(plot_size[0]):
+    #         for y in range(plot_size[1]):
+    #             this_index = pixel_map[x][y]
+    #             z_graph[y][x] = this_index
+    #             terrain_list = terrain_int2list(self.provinces[this_index - 1].terrain_int)
+    #             for terrain in terrain_list:
+    #                 z_terrain[y][x] += TERRAIN_2_HEIGHTS_DICT[terrain]
+    #             z_population[y][x] = self.provinces[this_index - 1].population
+    #
+    #     # Plotting the contourf and the province border contour map
+    #     levels = len(self.graph)
+    #     ax_graph.imshow(z_graph, cmap=cm.Set1)
+    #     ax_graph.contour(z_graph, levels=levels, colors=['white', ])
+    #     ax_graph.set_title('Provinces')
+    #     ax_terrain.imshow(z_terrain, vmin=-200, vmax=600, cmap=cm.terrain)
+    #     ax_terrain.contour(z_graph, levels=levels, colors=['white', ])
+    #     ax_terrain.set_title('Terrain')
+    #     ax_population.imshow(z_population, vmin=0, vmax=45000, cmap=cm.YlGn)
+    #     ax_population.contour(z_graph, levels=levels, colors=['white', ])
+    #     ax_population.set_title('Population')
+    #     fig.suptitle('%s Region' % self.name)
 
     def __str__(self):  # Printing the class returns this
 

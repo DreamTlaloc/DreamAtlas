@@ -1,4 +1,6 @@
-from DreamAtlas.databases import *
+from ..databases.dreamatlas_data import *
+from ..databases.dominions_data import *
+
 
 class Nation:
 

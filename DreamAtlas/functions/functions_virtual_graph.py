@@ -1,7 +1,5 @@
 import numpy as np
 
-from DreamAtlas import *
-
 
 def make_virtual_graph(graph, coordinates, darts, mapsize):
 

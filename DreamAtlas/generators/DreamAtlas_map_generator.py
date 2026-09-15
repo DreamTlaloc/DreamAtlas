@@ -1,18 +1,20 @@
-import numpy as np
-
-from DreamAtlas.classes import *
-from DreamAtlas.functions import *
-from DreamAtlas.databases import *
+from ..classes.class_settings import DreamAtlasSettings
+from ..classes.class_map import DominionsMap
+from ..classes.class_nation import Nation, CustomNation, GenericNation
+from ..classes.class_layout import DominionsLayout
+from ..classes.class_region import HomelandRegion, PeripheryRegion, ThroneRegion, CaveRegion, BlockerRegion, VastRegion, WaterRegion
+from ..functions.minor_functions import dibber, has_terrain, terrain_int2list
+from ..databases.dreamatlas_data import *
 from .DreamAtlas_geo_generator import simplex_generator_geography
+from ..functions.numba_pixel_mapping import pb_pixel_allocation
 
 
 def generator_dreamatlas(settings: type(DreamAtlasSettings),
                          ui=None,
                          seed: int = None):
-    def estimate_time(settings):
-        return 45
+
     if ui is not None:
-        ui.progress_bar.start(estimate_time(settings) * 10)
+        ui.progress_bar.start(450)
 
     def generator_logging(text):
         if ui is not None:
@@ -28,6 +30,7 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
     # Loading nations and making the nation -> graph dict
     generator_logging('Making nations...')
     nation_list = list()
+    cave_homelands = 0
     for nation_data in settings.vanilla_nations:
         nation_list.append(Nation(nation_data))
     for custom_nation_data in settings.custom_nations:
@@ -36,6 +39,8 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
         nation_list.append(GenericNation(generic_nation_data))
     for i, nation in enumerate(nation_list):
         nation.iid = i
+        if nation.layout == LAYOUT_PREF_CAVE:
+            cave_homelands += 1
 
     # Generate the player layout graph, determine the map size/region scale
     generator_logging('Making region layout...')
@@ -43,17 +48,17 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
     homeland_region_num = len(nation_list)
     periphery_region_num = int(0.5 * settings.player_neighbours * homeland_region_num)
 
-    pixels[0] += PIXELS_PER_PROVINCE * homeland_region_num * settings.homeland_size
+    pixels[0] += PIXELS_PER_PROVINCE * (homeland_region_num-cave_homelands) * settings.homeland_size
     pixels[0] += PIXELS_PER_PROVINCE * periphery_region_num * settings.periphery_size
     pixels[0] += PIXELS_PER_PROVINCE * settings.throne_region_num
     pixels[0] += PIXELS_PER_PROVINCE * settings.water_region_num * REGION_WATER_INFO[settings.water_region_type][2]
     pixels[0] += PIXELS_PER_PROVINCE * settings.vast_region_num
-    pixels[1] += PIXELS_PER_PROVINCE * settings.cave_region_num * REGION_CAVE_INFO[settings.cave_region_type][2] * 4
+    pixels[1] += PIXELS_PER_PROVINCE * (cave_homelands * settings.homeland_size + settings.cave_region_num * REGION_CAVE_INFO[settings.cave_region_type][2] + 4 * 4 * (cave_homelands+settings.cave_region_num))
 
     map_class.map_size[1:3] = np.multiply(np.floor_divide(np.outer(np.sqrt(pixels), np.asarray([1, 0.588])), 256), 256).astype(dtype=np.uint32)
     map_class.wraparound = NEIGHBOURS_FULL
-    map_class.scale[1] = min(map_class.map_size[1]) * np.asarray([0.035])
-    map_class.scale[2] = min(map_class.map_size[1]) * np.asarray([0.05])
+    map_class.scale[1] = min(map_class.map_size[1]) * np.asarray([0.02])
+    map_class.scale[2] = min(map_class.map_size[2]) * np.asarray([0.02])
     map_class.planes = [1, 2]
     layout = DominionsLayout(map_class)
     layout.generate_region_layout(settings=map_class.settings, map_size=map_class.map_size[1], nation_list=nation_list, seed=map_class.seed)
@@ -98,6 +103,10 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
             province.index = province_index[new_region.plane]
             province_list[new_region.plane].append(province)
             province_index[new_region.plane] += 1
+
+    for plane in map_class.planes:
+        for province in map_class.province_list[plane]:
+            print(terrain_int2list(province.terrain_int))
 
     special_start_locations = list()    # Generate the special start locations
     for region in region_list[0]:

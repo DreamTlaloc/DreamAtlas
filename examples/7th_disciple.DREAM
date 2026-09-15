@@ -1,0 +1,57 @@
+#index 0
+#seed 890
+#description DreamAtlas map
+#map_title 7th_Disciple
+#homeland_size 8
+#cap_connections 6
+#player_neighbours 6
+#periphery_size 3
+#throne_region_num 18
+#water_region_type 2
+#water_region_num 6
+#cave_region_type 2
+#cave_region_num 5
+#vast_region_num 0
+#art_style 0
+#wraparound 3
+#pop_balancing 1
+#site_frequency 55
+#vanilla_nation 5 7
+#vanilla_nation 10 4
+#vanilla_nation 14 4
+#vanilla_nation 15 7
+#vanilla_nation 16 8
+#vanilla_nation 21 5
+#vanilla_nation 23 1
+#vanilla_nation 32 5
+#vanilla_nation 43 1
+#vanilla_nation 44 4
+#vanilla_nation 51 6
+#vanilla_nation 55 9
+#vanilla_nation 56 3
+#vanilla_nation 57 9
+#vanilla_nation 59 4
+#vanilla_nation 61 9
+#vanilla_nation 62 8
+#vanilla_nation 64 2
+#vanilla_nation 69 9
+#vanilla_nation 70 2
+#vanilla_nation 78 7
+#vanilla_nation 80 7
+#vanilla_nation 85 8
+#vanilla_nation 89 2
+#vanilla_nation 96 3
+#vanilla_nation 97 3
+#vanilla_nation 101 6
+#vanilla_nation 102 5
+#vanilla_nation 105 8
+#vanilla_nation 107 2
+#vanilla_nation 111 5
+#vanilla_nation 115 6
+#vanilla_nation 118 1
+#vanilla_nation 121 3
+#vanilla_nation 123 6
+#vanilla_nation 126 1
+#age 3
+#disciples 1
+#omniscience 0
